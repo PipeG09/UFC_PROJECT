@@ -9,5 +9,4 @@ class UfcApiApplicationTests {
     @Test
     void contextLoads() {
     }
-
 }
