@@ -1,4 +1,4 @@
-package org.example.ufc_api.repositories;
+package org.example.ufc_api.repository;
 
 
 import org.example.ufc_api.model.Usuario;

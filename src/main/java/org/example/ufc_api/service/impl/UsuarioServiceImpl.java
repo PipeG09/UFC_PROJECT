@@ -1,14 +1,15 @@
-package org.example.ufc_api.services.impl;
+package org.example.ufc_api.service.impl;
 
-import com.example.ufc_api.dto.UsuarioDto;
-import com.example.ufc_api.model.Usuario;
-import com.example.ufc_api.repository.UsuarioRepository;
-import com.example.ufc_api.service.UsuarioService;
+import org.example.ufc_api.dto.UsuarioDto;
+import org.example.ufc_api.model.Usuario;
+import org.example.ufc_api.repository.UsuarioRepository;
+import org.example.ufc_api.service.UsuarioService;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.modelmapper.ModelMapper;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.time.LocalDateTime;
 
 @Service
 public class UsuarioServiceImpl implements UsuarioService {
