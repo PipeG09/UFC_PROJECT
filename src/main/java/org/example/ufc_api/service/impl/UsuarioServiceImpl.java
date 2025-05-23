@@ -7,6 +7,8 @@ import org.example.ufc_api.service.UsuarioService;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.modelmapper.ModelMapper;
+import org.springframework.web.bind.annotation.RequestBody;
+
 import java.util.List;
 import java.util.stream.Collectors;
 import java.time.LocalDateTime;
@@ -17,7 +19,7 @@ public class UsuarioServiceImpl implements UsuarioService {
     @Autowired private ModelMapper mapper;
 
     @Override
-    public UsuarioDto create(UsuarioDto dto) {
+    public UsuarioDto create(@RequestBody UsuarioDto dto) {
         Usuario entity = mapper.map(dto, Usuario.class);
         entity.setFechaCreacion(LocalDateTime.now());
         return mapper.map(repo.save(entity), UsuarioDto.class);

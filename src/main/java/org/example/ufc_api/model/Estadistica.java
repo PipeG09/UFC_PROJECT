@@ -34,8 +34,6 @@ public class Estadistica {
     @Column(name = "timestamp", nullable = false)
     private LocalDateTime timestamp;
 
-    // ——— GETTERS Y SETTERS ———
-
     public Long getId() {
         return id;
     }

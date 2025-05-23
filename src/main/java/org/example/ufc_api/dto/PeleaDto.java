@@ -10,7 +10,6 @@ public class PeleaDto {
     private LocalDateTime fecha;
     private Boolean finalizada;
 
-    // ——— GETTERS Y SETTERS ———
 
     public Long getId() {
         return id;
