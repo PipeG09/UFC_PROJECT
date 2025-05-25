@@ -8,7 +8,6 @@ public class ResultadoDto {
     private Integer roundFinal;
     private String tiempoFinal;
 
-    // ——— GETTERS Y SETTERS ———
 
     public Long getId() {
         return id;

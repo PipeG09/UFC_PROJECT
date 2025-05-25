@@ -12,8 +12,6 @@ public class EstadisticaDto {
     private Integer controlJaulaSegundos;
     private LocalDateTime timestamp;
 
-    // ——— GETTERS Y SETTERS ———
-
     public Long getId() {
         return id;
     }
