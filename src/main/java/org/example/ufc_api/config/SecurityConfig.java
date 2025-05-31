@@ -36,11 +36,20 @@ public class SecurityConfig {
     SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http.csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.POST, "/api/usuarios").permitAll() // registro abierto
-                        .requestMatchers("/api/**").authenticated()                    // resto protegido
+                        .requestMatchers(HttpMethod.POST, "/api/usuarios").permitAll()
+                        .requestMatchers(HttpMethod.GET,    "/api/usuarios").hasRole("admin")
+
+                        .requestMatchers(HttpMethod.GET, "/api/**").hasAnyRole("usuario", "admin")
+
+                        .requestMatchers(HttpMethod.POST,   "/api/**").hasRole("admin")
+                        .requestMatchers(HttpMethod.PUT,    "/api/**").hasRole("admin")
+                        .requestMatchers(HttpMethod.DELETE, "/api/**").hasRole("admin")
+
+                        .anyRequest().authenticated()
                 )
-                .httpBasic(Customizer.withDefaults());  // o .formLogin()
+                .httpBasic(Customizer.withDefaults());   // o JWT/FBEARER
         return http.build();
     }
+
 
 }

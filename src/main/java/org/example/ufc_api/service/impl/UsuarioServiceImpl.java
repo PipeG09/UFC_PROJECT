@@ -1,5 +1,6 @@
 package org.example.ufc_api.service.impl;
 
+import jakarta.transaction.Transactional;
 import org.example.ufc_api.dto.UsuarioDto;
 import org.example.ufc_api.model.Usuario;
 import org.example.ufc_api.repository.UsuarioRepository;
@@ -23,6 +24,7 @@ public class UsuarioServiceImpl implements UsuarioService {
     @Override
     public UsuarioDto create(UsuarioDto dto){
         Usuario entity = mapper.map(dto, Usuario.class);
+        entity.setRol("usuario");
         entity.setPassword(encoder.encode(dto.getPassword()));
         entity.setFechaCreacion(LocalDateTime.now());
         return mapper.map(repo.save(entity), UsuarioDto.class);
@@ -52,5 +54,14 @@ public class UsuarioServiceImpl implements UsuarioService {
     @Override
     public void delete(Long id) {
         repo.deleteById(id);
+    }
+
+    @Override
+    @Transactional
+    public UsuarioDto changeRole(Long id, String nuevoRol) {
+        Usuario u = repo.findById(id)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        u.setRol(nuevoRol);
+        return mapper.map(u, UsuarioDto.class);
     }
 }

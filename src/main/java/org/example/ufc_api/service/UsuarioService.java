@@ -9,4 +9,5 @@ public interface UsuarioService {
     UsuarioDto findById(Long id);
     UsuarioDto update(Long id, UsuarioDto dto);
     void delete(Long id);
+    UsuarioDto changeRole(Long id, String nuevoRol);
 }

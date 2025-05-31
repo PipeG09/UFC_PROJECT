@@ -3,6 +3,7 @@ package org.example.ufc_api.controller;
 import org.example.ufc_api.dto.UsuarioDto;
 import org.example.ufc_api.service.UsuarioService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
@@ -34,5 +35,12 @@ public class UsuarioController {
     @DeleteMapping("/{id}")
     public void delete(@PathVariable Long id) {
         service.delete(id);
+    }
+
+    @PutMapping("/{id}/rol")
+    @PreAuthorize("hasRole('admin')")
+    public UsuarioDto cambiarRol(@PathVariable Long id,
+                                 @RequestParam String rol) {
+        return service.changeRole(id, rol);
     }
 }
