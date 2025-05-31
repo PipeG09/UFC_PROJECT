@@ -4,6 +4,7 @@ import org.example.ufc_api.dto.UsuarioDto;
 import org.example.ufc_api.model.Usuario;
 import org.example.ufc_api.repository.UsuarioRepository;
 import org.example.ufc_api.service.UsuarioService;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.modelmapper.ModelMapper;
@@ -17,13 +18,16 @@ import java.time.LocalDateTime;
 public class UsuarioServiceImpl implements UsuarioService {
     @Autowired private UsuarioRepository repo;
     @Autowired private ModelMapper mapper;
+    @Autowired private PasswordEncoder encoder;
 
     @Override
-    public UsuarioDto create(@RequestBody UsuarioDto dto) {
+    public UsuarioDto create(UsuarioDto dto){
         Usuario entity = mapper.map(dto, Usuario.class);
+        entity.setPassword(encoder.encode(dto.getPassword()));
         entity.setFechaCreacion(LocalDateTime.now());
         return mapper.map(repo.save(entity), UsuarioDto.class);
     }
+
 
     @Override
     public List<UsuarioDto> findAll() {

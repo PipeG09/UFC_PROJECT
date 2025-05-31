@@ -4,10 +4,16 @@ import java.time.LocalDateTime;
 
 public class UsuarioDto {
     private Long id;
+
     private String nombre;
+
     private String correo;
+
     private String rol;
+
     private LocalDateTime fechaCreacion;
+
+    private String password;
 
     public String getCorreo() {
         return correo;
@@ -47,5 +53,13 @@ public class UsuarioDto {
 
     public void setRol(String rol) {
         this.rol = rol;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
+    }
+
+    public String getPassword() {
+        return password;
     }
 }

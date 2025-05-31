@@ -12,6 +12,9 @@ public class Usuario {
     @Column(nullable = false, length = 100)
     private String nombre;
 
+    @Column(nullable = false, length = 60)
+    private String password;
+
     @Column(nullable = false, unique = true, length = 100)
     private String correo;
 
@@ -54,5 +57,13 @@ public class Usuario {
     }
     public void setFechaCreacion(LocalDateTime fechaCreacion) {
         this.fechaCreacion = fechaCreacion;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
     }
 }

@@ -8,7 +8,6 @@ public class EventoDto {
     private LocalDate fecha;
     private String ubicacion;
 
-    // ——— GETTERS Y SETTERS ———
 
     public Long getId() {
         return id;
