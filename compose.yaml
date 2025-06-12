@@ -6,15 +6,25 @@ services:
       - 'POSTGRES_PASSWORD=ufc_pass'
       - 'POSTGRES_USER=ufc_user'
     ports:
-      - '5432'
+      - '5432:5432'
+
   rabbitmq:
-    image: 'rabbitmq:latest'
+    image: 'rabbitmq:3-management'
     environment:
       - 'RABBITMQ_DEFAULT_PASS=secret'
       - 'RABBITMQ_DEFAULT_USER=myuser'
     ports:
-      - '5672'
-  redis:
-    image: 'redis:latest'
+      - '5672:5672'
+      - '15672:15672'
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  # MAILHOG - AGREGAR ESTO SI NO ESTÁ
+  mailhog:
+    image: 'mailhog/mailhog'
     ports:
-      - '6379'
+      - '1025:1025'  # Puerto SMTP
+      - '8025:8025'  # Puerto Web UI
+
+volumes:
+  rabbitmq_data:

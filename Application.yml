@@ -1,0 +1,53 @@
+spring:
+  # Base de datos
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ufc_tracker
+    username: ufc_user
+    password: ufc_pass
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+  # RabbitMQ
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: myuser
+    password: secret
+    virtual-host: /
+    connection-timeout: 60000
+
+  # GMAIL REAL - CAMBIAR ESTOS VALORES:
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: apinoreply2000@gmail.com           # 👈 TU EMAIL REAL
+    password: rjvgzksoavqnreva  # 👈 TU CONTRASEÑA DE APLICACIÓN (16 caracteres)
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+        debug: false
+
+# Configuración personalizada
+app:
+  email:
+    from: "UFC Live Tracker <apinoreply2000@gmail.com>"  # 👈 TU EMAIL REAL
+
+  rabbitmq:
+    exchanges:
+      user: ufc.user.events
+      notification: ufc.notifications
+    queues:
+      user-registration: user.registration
+      email-notification: email.notifications
+    routing-keys:
+      user-registered: user.registered
+      send-email: email.send
