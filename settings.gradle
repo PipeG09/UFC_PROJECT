@@ -1,1 +1,3 @@
 rootProject.name = 'UFC_API'
+include 'ufc-frontend'
+

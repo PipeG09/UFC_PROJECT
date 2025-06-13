@@ -44,7 +44,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST,   "/api/**").hasRole("admin")
                         .requestMatchers(HttpMethod.PUT,    "/api/**").hasRole("admin")
                         .requestMatchers(HttpMethod.DELETE, "/api/**").hasRole("admin")
-
+                        .requestMatchers("/", "/index.html", "/css/**", "/js/**", "/assets/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .httpBasic(Customizer.withDefaults());   // o JWT/FBEARER
