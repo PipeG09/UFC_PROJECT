@@ -1044,6 +1044,41 @@
     function showFights() {
         hideAllViews();
         document.getElementById('liveFight').classList.add('active');
+
+        // Conectar WebSocket cuando se muestra la vista de pelea
+        if (!liveWebSocket) {
+            liveWebSocket = new LiveFightWebSocket();
+        }
+        liveWebSocket.connect();
+    }
+
+    // Modificar showDashboard para desconectar WebSocket
+    function showDashboard() {
+        hideAllViews();
+        document.getElementById('dashboard').classList.add('active');
+        loadDashboardData();
+
+        // Desconectar WebSocket cuando se sale de la vista de pelea
+        if (liveWebSocket) {
+            liveWebSocket.disconnect();
+        }
+    }
+
+    // Desconectar cuando se cierra la página
+    window.addEventListener('beforeunload', () => {
+        if (liveWebSocket) {
+            liveWebSocket.disconnect();
+        }
+    });
+
+    // Función para forzar actualización manual
+    function forceUpdate() {
+        if (liveWebSocket && liveWebSocket.isConnected) {
+            liveWebSocket.requestUpdate();
+            showToast('Solicitando actualización...', 'success');
+        } else {
+            showToast('No hay conexión WebSocket', 'error');
+        }
     }
 
     function hideAllViews() {
@@ -1282,39 +1317,203 @@
         }, 3000);
     }
 
-    // Demo functions for live fight simulation
-    function startLiveFightDemo() {
-        // Simulate real-time updates
-        setInterval(() => {
-            updateLiveStats();
-        }, 5000);
-    }
+    // WebSocket Live Fight Tracker
+    class LiveFightWebSocket {
+        constructor() {
+            this.ws = null;
+            this.reconnectAttempts = 0;
+            this.maxReconnectAttempts = 5;
+            this.reconnectDelay = 2000;
+            this.isConnected = false;
+        }
 
-    function updateLiveStats() {
-        // Random stats for demo
-        const blueStrikes = Math.floor(Math.random() * 20) + 5;
-        const redStrikes = Math.floor(Math.random() * 20) + 5;
-        const blueTakedowns = Math.floor(Math.random() * 3);
-        const redTakedowns = Math.floor(Math.random() * 3);
+        connect() {
+            try {
+                this.ws = new WebSocket('ws://localhost:8080/live-fight');
 
-        // Update probability based on performance
-        const total = blueStrikes + redStrikes;
-        const blueProb = Math.round((blueStrikes / total) * 100);
-        const redProb = 100 - blueProb;
+                this.ws.onopen = (event) => {
+                    console.log('🔴 WebSocket conectado');
+                    this.isConnected = true;
+                    this.reconnectAttempts = 0;
+                    this.showConnectionStatus('Conectado en tiempo real', 'success');
+                };
 
-        // Update DOM if in live fight view
-        if (document.getElementById('liveFight').classList.contains('active')) {
-            document.querySelector('.stat-blue').textContent = blueStrikes;
-            document.querySelector('.stat-red').textContent = redStrikes;
-            document.querySelector('.prob-blue').style.width = `${blueProb}%`;
-            document.querySelector('.prob-red').style.width = `${redProb}%`;
-            document.querySelector('.prob-values .stat-blue').textContent = `${blueProb}%`;
-            document.querySelector('.prob-values .stat-red').textContent = `${redProb}%`;
+                this.ws.onmessage = (event) => {
+                    try {
+                        const message = JSON.parse(event.data);
+                        this.handleMessage(message);
+                    } catch (error) {
+                        console.error('Error parseando mensaje:', error);
+                    }
+                };
+
+                this.ws.onclose = (event) => {
+                    console.log('❌ WebSocket desconectado:', event.code, event.reason);
+                    this.isConnected = false;
+                    this.showConnectionStatus('Desconectado', 'error');
+                    this.attemptReconnect();
+                };
+
+                this.ws.onerror = (error) => {
+                    console.error('🚫 Error WebSocket:', error);
+                    this.showConnectionStatus('Error de conexión', 'error');
+                };
+
+            } catch (error) {
+                console.error('Error creando WebSocket:', error);
+                this.attemptReconnect();
+            }
+        }
+
+        handleMessage(message) {
+            console.log('📨 Mensaje recibido:', message);
+
+            switch (message.type) {
+                case 'welcome':
+                    console.log('👋 Bienvenida:', message.data);
+                    showToast('Conectado a transmisión en vivo', 'success');
+                    break;
+
+                case 'fight-stats':
+                    this.updateFightStats(message.data);
+                    break;
+
+                default:
+                    console.log('Mensaje no reconocido:', message);
+            }
+        }
+
+        updateFightStats(stats) {
+            // Actualizar estadísticas en la UI
+            const elements = {
+                blueStrikes: document.querySelector('.stat-row:nth-child(1) .stat-blue'),
+                redStrikes: document.querySelector('.stat-row:nth-child(1) .stat-red'),
+                blueTakedowns: document.querySelector('.stat-row:nth-child(2) .stat-blue'),
+                redTakedowns: document.querySelector('.stat-row:nth-child(2) .stat-red'),
+                blueCageControl: document.querySelector('.stat-row:nth-child(3) .stat-blue'),
+                redCageControl: document.querySelector('.stat-row:nth-child(3) .stat-red'),
+                currentRound: document.querySelector('.fight-status'),
+                blueProbability: document.querySelector('.prob-values .stat-blue'),
+                redProbability: document.querySelector('.prob-values .stat-red'),
+                probBlueBar: document.querySelector('.prob-blue'),
+                probRedBar: document.querySelector('.prob-red')
+            };
+
+            if (elements.blueStrikes) elements.blueStrikes.textContent = stats.blueStrikes;
+            if (elements.redStrikes) elements.redStrikes.textContent = stats.redStrikes;
+            if (elements.blueTakedowns) elements.blueTakedowns.textContent = stats.blueTakedowns;
+            if (elements.redTakedowns) elements.redTakedowns.textContent = stats.redTakedowns;
+            if (elements.blueCageControl) elements.blueCageControl.textContent = this.formatTime(stats.blueCageControl);
+            if (elements.redCageControl) elements.redCageControl.textContent = this.formatTime(stats.redCageControl);
+            if (elements.currentRound) elements.currentRound.textContent = `🔴 EN VIVO - Round ${stats.currentRound} (${stats.timeRemaining})`;
+            if (elements.blueProbability) elements.blueProbability.textContent = `${stats.blueProbability}%`;
+            if (elements.redProbability) elements.redProbability.textContent = `${stats.redProbability}%`;
+            if (elements.probBlueBar) elements.probBlueBar.style.width = `${stats.blueProbability}%`;
+            if (elements.probRedBar) elements.probRedBar.style.width = `${stats.redProbability}%`;
+
+            const timestamp = document.querySelector('.probability-panel p');
+            if (timestamp) {
+                timestamp.textContent = 'Actualizado ahora mismo';
+            }
+
+            this.addUpdateEffect();
+        }
+
+        formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        addUpdateEffect() {
+            const panels = document.querySelectorAll('.stats-panel, .probability-panel');
+            panels.forEach(panel => {
+                panel.style.transform = 'scale(1.02)';
+                panel.style.transition = 'transform 0.2s ease';
+                setTimeout(() => {
+                    panel.style.transform = 'scale(1)';
+                }, 200);
+            });
+        }
+
+        showConnectionStatus(message, type) {
+            const existingStatus = document.querySelector('.connection-status');
+            if (existingStatus) {
+                existingStatus.remove();
+            }
+
+            const status = document.createElement('div');
+            status.className = `connection-status ${type}`;
+            status.style.cssText = `
+                    position: fixed;
+                    top: 10px;
+                    right: 10px;
+                    padding: 0.5rem 1rem;
+                    border-radius: 5px;
+                    color: white;
+                    font-size: 0.9rem;
+                    z-index: 4000;
+                    background: ${type === 'success' ? '#4caf50' : '#f44336'};
+                    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+                    transform: translateX(300px);
+                    transition: transform 0.3s ease;
+                `;
+            status.innerHTML = `🌐 ${message}`;
+
+            document.body.appendChild(status);
+
+            setTimeout(() => {
+                status.style.transform = 'translateX(0)';
+            }, 100);
+
+            setTimeout(() => {
+                status.style.transform = 'translateX(300px)';
+                setTimeout(() => {
+                    if (status.parentNode) {
+                        status.remove();
+                    }
+                }, 300);
+            }, 3000);
+        }
+
+        attemptReconnect() {
+            if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                this.reconnectAttempts++;
+                console.log(`🔄 Reintentando conexión (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+
+                setTimeout(() => {
+                    this.connect();
+                }, this.reconnectDelay);
+
+                this.reconnectDelay = Math.min(this.reconnectDelay * 1.5, 10000);
+            } else {
+                console.log('❌ Máximo de reintentos alcanzado');
+                this.showConnectionStatus('Sin conexión - Refresca la página', 'error');
+            }
+        }
+
+        disconnect() {
+            if (this.ws) {
+                this.ws.close();
+                this.ws = null;
+                this.isConnected = false;
+            }
+        }
+
+        sendMessage(message) {
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify(message));
+            } else {
+                console.warn('WebSocket no conectado');
+            }
+        }
+
+        requestUpdate() {
+            this.sendMessage('request_update');
         }
     }
 
-    // Start live demo when app loads
-    setTimeout(startLiveFightDemo, 2000);
+    let liveWebSocket = null;
 </script>
 </body>
 </html>

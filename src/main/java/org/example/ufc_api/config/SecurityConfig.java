@@ -40,12 +40,13 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET,    "/api/usuarios").hasRole("admin")
 
                         .requestMatchers(HttpMethod.GET, "/api/**").hasAnyRole("usuario", "admin")
-
+                        .requestMatchers("/live-fight/**").permitAll()
                         .requestMatchers(HttpMethod.POST,   "/api/**").hasRole("admin")
                         .requestMatchers(HttpMethod.PUT,    "/api/**").hasRole("admin")
                         .requestMatchers(HttpMethod.DELETE, "/api/**").hasRole("admin")
                         .requestMatchers("/", "/index.html", "/css/**", "/js/**", "/assets/**").permitAll()
                         .anyRequest().authenticated()
+
                 )
                 .httpBasic(Customizer.withDefaults());   // o JWT/FBEARER
         return http.build();
