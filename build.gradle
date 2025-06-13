@@ -37,7 +37,6 @@ dependencies {
     // NUEVAS DEPENDENCIAS PARA EMAIL
     implementation 'org.springframework.boot:spring-boot-starter-mail'
 
-
     // ModelMapper
     implementation 'org.modelmapper:modelmapper:3.1.1'
 

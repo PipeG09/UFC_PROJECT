@@ -19,12 +19,5 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
 
-  # MAILHOG - AGREGAR ESTO SI NO ESTÁ
-  mailhog:
-    image: 'mailhog/mailhog'
-    ports:
-      - '1025:1025'  # Puerto SMTP
-      - '8025:8025'  # Puerto Web UI
-
 volumes:
   rabbitmq_data:

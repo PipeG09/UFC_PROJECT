@@ -25,8 +25,8 @@ spring:
   mail:
     host: smtp.gmail.com
     port: 587
-    username: apinoreply2000@gmail.com           # 👈 TU EMAIL REAL
-    password: rjvgzksoavqnreva  # 👈 TU CONTRASEÑA DE APLICACIÓN (16 caracteres)
+    username: apinoreply2000@gmail.com
+    password: rjvgzksoavqnreva
     properties:
       mail:
         smtp:
