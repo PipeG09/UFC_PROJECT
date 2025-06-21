@@ -36,21 +36,26 @@ public class SecurityConfig {
     SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http.csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
+                        // ✅ ARCHIVOS ESTÁTICOS - SIN AUTENTICACIÓN
+                        .requestMatchers("/", "/index.html", "/css/**", "/js/**", "/assets/**", "/favicon.ico").permitAll()
+
+                        // ✅ WEBSOCKET Y SOCKJS - SIN AUTENTICACIÓN
+                        .requestMatchers("/live-fight/**", "/sockjs-node/**", "/info/**").permitAll()
+
+                        // ✅ REGISTRO DE USUARIOS - SIN AUTENTICACIÓN
                         .requestMatchers(HttpMethod.POST, "/api/usuarios").permitAll()
-                        .requestMatchers(HttpMethod.GET,    "/api/usuarios").hasRole("admin")
 
+                        // ❌ ENDPOINTS API CON AUTENTICACIÓN Y ROLES
+                        .requestMatchers(HttpMethod.GET, "/api/usuarios").hasRole("admin")
                         .requestMatchers(HttpMethod.GET, "/api/**").hasAnyRole("usuario", "admin")
-                        .requestMatchers("/live-fight/**").permitAll()
-                        .requestMatchers(HttpMethod.POST,   "/api/**").hasRole("admin")
-                        .requestMatchers(HttpMethod.PUT,    "/api/**").hasRole("admin")
+                        .requestMatchers(HttpMethod.POST, "/api/**").hasRole("admin")
+                        .requestMatchers(HttpMethod.PUT, "/api/**").hasRole("admin")
                         .requestMatchers(HttpMethod.DELETE, "/api/**").hasRole("admin")
-                        .requestMatchers("/", "/index.html", "/css/**", "/js/**", "/assets/**").permitAll()
-                        .anyRequest().authenticated()
 
+                        // ❌ TODO LO DEMÁS REQUIERE AUTENTICACIÓN
+                        .anyRequest().authenticated()
                 )
-                .httpBasic(Customizer.withDefaults());   // o JWT/FBEARER
+                .httpBasic(Customizer.withDefaults());   // Autenticación HTTP Basic
         return http.build();
     }
-
-
 }

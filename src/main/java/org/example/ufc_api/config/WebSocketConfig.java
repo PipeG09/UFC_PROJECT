@@ -15,8 +15,14 @@ public class WebSocketConfig implements WebSocketConfigurer {
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(new LiveFightHandler(), "/live-fight")
-                .setAllowedOrigins("*")  // En producción, especifica dominios
-                .withSockJS();  // Fallback para navegadores antiguos
+                .setAllowedOrigins(
+                        "http://localhost:8080",     // Servidor Spring Boot
+                        "http://127.0.0.1:8080",     // IP local alternativa
+                        "http://localhost:3000",     // Si usas servidor de desarrollo separado
+                        "http://127.0.0.1:3000"      // IP local para servidor dev
+                )
+                .setAllowedOriginPatterns("http://localhost:*", "http://127.0.0.1:*") // Cualquier puerto local
+                .withSockJS();                   // Fallback para navegadores antiguos
     }
 
     @Bean
