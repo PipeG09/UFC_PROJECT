@@ -20,6 +20,12 @@ public class Luchador {
     @Column(name = "categoria_peso", length = 30)
     private String categoriaPeso;
 
+    // NUEVO CAMPO PARA HISTORIAL
+    @Column(length = 20)
+    private String historial;
+
+    // ——— GETTERS Y SETTERS ———
+
     public Long getId() {
         return id;
     }
@@ -54,5 +60,12 @@ public class Luchador {
     public void setCategoriaPeso(String categoriaPeso) {
         this.categoriaPeso = categoriaPeso;
     }
-}
 
+    // NUEVO GETTER Y SETTER PARA HISTORIAL
+    public String getHistorial() {
+        return historial;
+    }
+    public void setHistorial(String historial) {
+        this.historial = historial;
+    }
+}

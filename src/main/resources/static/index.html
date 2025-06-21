@@ -12,6 +12,51 @@
             box-sizing: border-box;
         }
 
+        .fighter-record {
+            color: #cccccc;
+            font-size: 0.9rem;
+            margin-top: 0.2rem;
+        }
+
+        .fighter-nationality {
+            color: #f57c00;
+            font-size: 0.8rem;
+            margin-top: 0.3rem;
+            font-style: italic;
+        }
+
+        .fighter-weight-class {
+            color: #d32f2f;
+            font-size: 0.8rem;
+            margin-top: 0.2rem;
+            font-weight: bold;
+        }
+
+        .fight-item .fighter-record {
+            color: #999;
+            font-size: 0.8rem;
+            margin-left: 0.5rem;
+        }
+
+        .fighters {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        @media (max-width: 768px) {
+            .fighters {
+                flex-direction: column;
+                text-align: center;
+                gap: 0.2rem;
+            }
+
+            .fighter-record {
+                font-size: 0.8rem;
+            }
+        }
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #0f1419 0%, #1a1f2e 50%, #2d1b2e 100%);
@@ -794,15 +839,17 @@
             <div class="fight-title">UFC 300 - Pelea Principal</div>
             <div class="fighters-vs">
                 <div class="fighter-card">
-                    <div class="fighter-avatar">🥊</div>
+                    <div class="fighter-avatar"> <img src="https://ssl.gstatic.com/onebox/media/sports/photos/ufc/3605_H-bQHA_96x96.png" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
+                    </div>
                     <div class="fighter-name">Luchador Azul</div>
-                    <div class="fighter-record">23-4-0</div>
+                    <div class="fighter-record" id="fighterRecord1">Cargando...</div>
                 </div>
                 <div class="vs-separator">VS</div>
                 <div class="fighter-card">
-                    <div class="fighter-avatar">🥊</div>
+                    <div class="fighter-avatar"> <img src="https://ssl.gstatic.com/onebox/media/sports/photos/ufc/1531_bqT22g_96x96.png" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
+                    </div>
                     <div class="fighter-name">Luchador Rojo</div>
-                    <div class="fighter-record">19-2-1</div>
+                    <div class="fighter-record" id="fighterRecord2">Cargando...</div>
                 </div>
             </div>
             <div style="text-align: center; margin-top: 1rem;">
@@ -816,15 +863,15 @@
                 <div class="stat-row">
                     <span class="stat-label">Golpes Conectados</span>
                     <div class="stat-values">
-                        <span class="stat-blue">12</span>
-                        <span class="stat-red">8</span>
+                        <span class="stat-blue">20</span>
+                        <span class="stat-red">7</span>
                     </div>
                 </div>
                 <div class="stat-row">
                     <span class="stat-label">Derribos</span>
                     <div class="stat-values">
-                        <span class="stat-blue">2</span>
-                        <span class="stat-red">0</span>
+                        <span class="stat-blue">7</span>
+                        <span class="stat-red">3</span>
                     </div>
                 </div>
                 <div class="stat-row">
@@ -839,12 +886,12 @@
             <div class="probability-panel">
                 <h3>🎯 Probabilidades de Victoria</h3>
                 <div class="probability-chart">
-                    <div class="prob-blue" style="width: 65%;"></div>
-                    <div class="prob-red" style="width: 35%;"></div>
+                    <div class="prob-blue" style="width: 75%;"></div>
+                    <div class="prob-red" style="width: 25%;"></div>
                 </div>
                 <div class="prob-values">
-                    <span class="stat-blue">65%</span>
-                    <span class="stat-red">35%</span>
+                    <span class="stat-blue">75%</span>
+                    <span class="stat-red">25%</span>
                 </div>
                 <p style="color: #cccccc; margin-top: 1rem; font-size: 0.9rem;">
                     Actualizado hace 5 segundos
@@ -865,6 +912,215 @@
         checkAuthStatus();
         setupEventListeners();
     });
+
+    async function loadFightersForEvent(eventoId) {
+        try {
+            const response = await fetch(`${API_BASE}/luchadores`, {
+                headers: {
+                    'Authorization': `Basic ${currentUser.credentials}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.ok) {
+                const luchadores = await response.json();
+
+                // Buscar luchadores específicos para mostrar en la vista en vivo
+                const topuria = luchadores.find(l => l.nombre === 'Ilia Topuria');
+                const oliveira = luchadores.find(l => l.nombre === 'Charles Oliveira');
+
+                if (topuria && oliveira) {
+                    updateFighterDisplay('blue', topuria);
+                    updateFighterDisplay('red', oliveira);
+                }
+            }
+        } catch (error) {
+            console.error('Error cargando luchadores:', error);
+        }
+    }
+
+    // FUNCIÓN PARA ACTUALIZAR LA INFORMACIÓN DE UN LUCHADOR EN LA UI
+    function updateFighterDisplay(corner, fighter) {
+        const fighterCard = document.querySelector(`.fighter-card.${corner}`);
+        if (fighterCard) {
+            // Actualizar nombre
+            const nameElement = fighterCard.querySelector('.fighter-name');
+            if (nameElement) {
+                nameElement.textContent = fighter.nombre;
+            }
+
+            // Actualizar historial
+            const recordElement = fighterCard.querySelector('.fighter-record');
+            if (recordElement) {
+                recordElement.textContent = fighter.historial || 'N/A';
+            }
+
+            // Actualizar nacionalidad si existe
+            const nationalityElement = fighterCard.querySelector('.fighter-nationality');
+            if (nationalityElement) {
+                nationalityElement.textContent = fighter.nacionalidad || '';
+            }
+
+            // Actualizar categoría de peso si existe
+            const weightClassElement = fighterCard.querySelector('.fighter-weight-class');
+            if (weightClassElement) {
+                weightClassElement.textContent = fighter.categoriaPeso || '';
+            }
+        }
+    }
+
+    // ACTUALIZAR LA FUNCIÓN showFights PARA CARGAR DATOS REALES
+    function showFights() {
+        hideAllViews();
+        document.getElementById('liveFight').classList.add('active');
+
+        // Cargar datos reales de luchadores
+        loadFightersForEvent();
+
+        // Conectar WebSocket cuando se muestra la vista de pelea
+        if (!liveWebSocket) {
+            liveWebSocket = new LiveFightWebSocket();
+        }
+        liveWebSocket.connect();
+    }
+
+    // NUEVA FUNCIÓN PARA RENDERIZAR EVENTOS CON DATOS DE LUCHADORES REALES
+    async function renderEventsWithFighters(eventos) {
+        const eventsGrid = document.getElementById('eventsGrid');
+
+        if (eventos.length === 0) {
+            eventsGrid.innerHTML = `
+            <div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: #cccccc;">
+                <i class="fas fa-calendar-times" style="font-size: 3rem; margin-bottom: 1rem; color: #666;"></i>
+                <h3>No hay eventos disponibles</h3>
+                <p>Crea tu primer evento para comenzar</p>
+                <button class="btn" onclick="createEvent()" style="margin-top: 1rem;">
+                    <i class="fas fa-plus"></i> Crear Evento
+                </button>
+            </div>
+        `;
+            return;
+        }
+
+        // Cargar luchadores para mostrar en las peleas
+        let luchadores = [];
+        try {
+            const response = await fetch(`${API_BASE}/luchadores`, {
+                headers: {
+                    'Authorization': `Basic ${currentUser.credentials}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            if (response.ok) {
+                luchadores = await response.json();
+            }
+        } catch (error) {
+            console.error('Error cargando luchadores:', error);
+        }
+
+        eventsGrid.innerHTML = eventos.map(evento => {
+            // Buscar peleas para este evento (simulado por ahora)
+            const mainEventFighters = getMainEventFighters(evento.id, luchadores);
+
+            return `
+            <div class="event-card">
+                <div class="event-header">
+                    <h3>${evento.nombre}</h3>
+                    <div class="event-date">
+                        <i class="fas fa-calendar"></i>
+                        ${formatDate(evento.fecha)}
+                    </div>
+                </div>
+                <div class="event-body">
+                    <div class="event-location">
+                        <i class="fas fa-map-marker-alt"></i>
+                        ${evento.ubicacion || 'Ubicación por definir'}
+                    </div>
+                    <div class="fights-preview">
+                        <h4><i class="fas fa-fist-raised"></i> Main Event</h4>
+                        ${mainEventFighters ? `
+                            <div class="fight-item">
+                                <div class="fighters">
+                                    <span class="fighter">${mainEventFighters.fighter1.nombre}</span>
+                                    <span class="fighter-record">(${mainEventFighters.fighter1.historial})</span>
+                                    <span class="vs">VS</span>
+                                    <span class="fighter">${mainEventFighters.fighter2.nombre}</span>
+                                    <span class="fighter-record">(${mainEventFighters.fighter2.historial})</span>
+                                </div>
+                                <span class="fight-status status-upcoming">Próximamente</span>
+                            </div>
+                        ` : `
+                            <div class="fight-item">
+                                <div class="fighters">
+                                    <span class="fighter">Peleas por definir</span>
+                                </div>
+                                <span class="fight-status status-upcoming">Próximamente</span>
+                            </div>
+                        `}
+                    </div>
+                    <div class="event-actions">
+                        <button class="btn" onclick="viewEvent(${evento.id})">
+                            <i class="fas fa-eye"></i> Ver Evento
+                        </button>
+                        <button class="btn btn-secondary" onclick="editEvent(${evento.id})">
+                            <i class="fas fa-edit"></i> Editar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        }).join('');
+    }
+
+    // FUNCIÓN HELPER PARA OBTENER LUCHADORES DEL MAIN EVENT
+    function getMainEventFighters(eventoId, luchadores) {
+        // Para UFC 317, buscar Topuria vs Oliveira
+        const topuria = luchadores.find(l => l.nombre === 'Ilia Topuria');
+        const oliveira = luchadores.find(l => l.nombre === 'Charles Oliveira');
+
+        if (topuria && oliveira) {
+            return {
+                fighter1: topuria,
+                fighter2: oliveira
+            };
+        }
+
+        // Para otros eventos, tomar los primeros dos luchadores disponibles
+        if (luchadores.length >= 2) {
+            return {
+                fighter1: luchadores[0],
+                fighter2: luchadores[1]
+            };
+        }
+
+        return null;
+    }
+
+    // ACTUALIZAR LA FUNCIÓN loadEvents PARA USAR LA NUEVA FUNCIÓN
+    async function loadEvents() {
+        try {
+            const response = await fetch(`${API_BASE}/eventos`, {
+                headers: {
+                    'Authorization': `Basic ${currentUser.credentials}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.ok) {
+                const eventos = await response.json();
+                document.getElementById('totalEvents').textContent = eventos.length;
+
+                // Usar la nueva función que incluye datos de luchadores
+                await renderEventsWithFighters(eventos);
+            } else {
+                throw new Error('Error cargando eventos');
+            }
+        } catch (error) {
+            console.error('Error loading events:', error);
+            document.getElementById('totalEvents').textContent = '0';
+            await renderEventsWithFighters([]);
+        }
+    }
 
     function setupEventListeners() {
         // Auth forms
@@ -935,31 +1191,30 @@
         setLoadingState('login', true);
 
         try {
-            // Create Basic Auth header
-            const credentials = btoa(`${email}:${password}`);
-
-            const response = await fetch(`${API_BASE}/usuarios`, {
+            // Primero intentar el endpoint de autenticación
+            const response = await fetch(`${API_BASE}/auth/login`, {
+                method: 'POST',
                 headers: {
-                    'Authorization': `Basic ${credentials}`,
                     'Content-Type': 'application/json'
-                }
+                },
+                body: JSON.stringify({ email, password })
             });
 
             if (response.ok) {
-                // If we can access protected endpoint, login is successful
-                // For demo purposes, we'll create a user object
+                const userData = await response.json();
+
+                // Guardar usuario con credenciales para futuros requests
                 currentUser = {
-                    email: email,
-                    nombre: email.split('@')[0],
-                    rol: 'usuario',
-                    credentials: credentials
+                    ...userData,
+                    credentials: btoa(`${email}:${password}`)
                 };
 
                 localStorage.setItem('currentUser', JSON.stringify(currentUser));
                 showToast('¡Inicio de sesión exitoso!', 'success');
                 showApp();
             } else {
-                throw new Error('Credenciales inválidas');
+                const error = await response.json();
+                throw new Error(error.error || 'Credenciales inválidas');
             }
         } catch (error) {
             showToast(error.message || 'Error de inicio de sesión', 'error');
@@ -1035,28 +1290,6 @@
         hideAllViews();
         document.getElementById('dashboard').classList.add('active');
         loadDashboardData();
-    }
-
-    function showEvents() {
-        showDashboard(); // For now, same as dashboard
-    }
-
-    function showFights() {
-        hideAllViews();
-        document.getElementById('liveFight').classList.add('active');
-
-        // Conectar WebSocket cuando se muestra la vista de pelea
-        if (!liveWebSocket) {
-            liveWebSocket = new LiveFightWebSocket();
-        }
-        liveWebSocket.connect();
-    }
-
-    // Modificar showDashboard para desconectar WebSocket
-    function showDashboard() {
-        hideAllViews();
-        document.getElementById('dashboard').classList.add('active');
-        loadDashboardData();
 
         // Desconectar WebSocket cuando se sale de la vista de pelea
         if (liveWebSocket) {
@@ -1064,21 +1297,238 @@
         }
     }
 
-    // Desconectar cuando se cierra la página
-    window.addEventListener('beforeunload', () => {
-        if (liveWebSocket) {
-            liveWebSocket.disconnect();
-        }
-    });
+    function showEvents() {
+        showDashboard(); // For now, same as dashboard
+    }
 
-    // Función para forzar actualización manual
-    function forceUpdate() {
-        if (liveWebSocket && liveWebSocket.isConnected) {
-            liveWebSocket.requestUpdate();
-            showToast('Solicitando actualización...', 'success');
-        } else {
-            showToast('No hay conexión WebSocket', 'error');
+    async function showFights() {
+        hideAllViews();
+        document.getElementById('liveFight').classList.add('active');
+
+        // Primero cargar los datos de la pelea desde la API
+        await loadCurrentFight();
+
+        // Luego conectar WebSocket
+        if (!liveWebSocket) {
+            liveWebSocket = new LiveFightWebSocket();
         }
+        liveWebSocket.connect();
+    }
+
+    async function loadCurrentFight() {
+        try {
+            // Obtener peleas no finalizadas
+            const response = await fetch(`${API_BASE}/peleas`, {
+                headers: {
+                    'Authorization': `Basic ${currentUser.credentials}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.ok) {
+                const peleas = await response.json();
+                const peleasEnVivo = peleas.filter(p => !p.finalizada);
+
+                if (peleasEnVivo.length > 0) {
+                    // Tomar la primera pelea en vivo
+                    const pelea = peleasEnVivo[0];
+                    await displayFightInfo(pelea);
+                } else {
+                    // No hay peleas en vivo
+                    document.querySelector('.fight-title').textContent = 'No hay peleas en vivo';
+                    document.querySelector('.fight-status').textContent = 'Sin peleas activas';
+                    document.querySelector('.fight-status').className = 'fight-status status-finished';
+                }
+            }
+        } catch (error) {
+            console.error('Error cargando pelea actual:', error);
+            showToast('Error cargando información de la pelea', 'error');
+        }
+    }
+
+    async function displayFightInfo(pelea) {
+        try {
+            // Cargar información del evento
+            const eventoResponse = await fetch(`${API_BASE}/eventos/${pelea.eventoId}`, {
+                headers: {
+                    'Authorization': `Basic ${currentUser.credentials}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            const evento = await eventoResponse.json();
+
+            // Cargar información de los luchadores
+            const [luchadorAzulResponse, luchadorRojoResponse] = await Promise.all([
+                fetch(`${API_BASE}/luchadores/${pelea.luchadorAzulId}`, {
+                    headers: {
+                        'Authorization': `Basic ${currentUser.credentials}`,
+                        'Content-Type': 'application/json'
+                    }
+                }),
+                fetch(`${API_BASE}/luchadores/${pelea.luchadorRojoId}`, {
+                    headers: {
+                        'Authorization': `Basic ${currentUser.credentials}`,
+                        'Content-Type': 'application/json'
+                    }
+                })
+            ]);
+
+            const luchadorAzul = await luchadorAzulResponse.json();
+            const luchadorRojo = await luchadorRojoResponse.json();
+
+            // Actualizar la UI con datos reales
+            document.querySelector('.fight-title').textContent = `${evento.nombre} - Pelea Principal`;
+
+            // Actualizar luchador azul
+            document.querySelector('.fighters-vs .fighter-card:first-child .fighter-name').textContent = luchadorAzul.nombre;
+            document.querySelector('.fighters-vs .fighter-card:first-child .fighter-record').textContent =
+                `${luchadorAzul.nacionalidad || 'Internacional'} - ${luchadorAzul.edad || '?'} años`;
+
+            // Actualizar luchador rojo
+            document.querySelector('.fighters-vs .fighter-card:last-child .fighter-name').textContent = luchadorRojo.nombre;
+            document.querySelector('.fighters-vs .fighter-card:last-child .fighter-record').textContent =
+                `${luchadorRojo.nacionalidad || 'Internacional'} - ${luchadorRojo.edad || '?'} años`;
+
+            // Cargar estadísticas reales
+            await loadFightStatistics(pelea.id, pelea.luchadorAzulId, pelea.luchadorRojoId);
+
+        } catch (error) {
+            console.error('Error mostrando información de la pelea:', error);
+        }
+    }
+
+    async function loadFightStatistics(peleaId, luchadorAzulId, luchadorRojoId) {
+        try {
+            // Cargar estadísticas desde la API
+            const statsResponse = await fetch(`${API_BASE}/estadisticas`, {
+                headers: {
+                    'Authorization': `Basic ${currentUser.credentials}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (statsResponse.ok) {
+                const todasEstadisticas = await statsResponse.json();
+
+                // Filtrar estadísticas de esta pelea
+                const statsAzul = todasEstadisticas.filter(s =>
+                    s.peleaId === peleaId && s.luchadorId === luchadorAzulId);
+                const statsRojo = todasEstadisticas.filter(s =>
+                    s.peleaId === peleaId && s.luchadorId === luchadorRojoId);
+
+                // Calcular totales
+                const totalesAzul = calcularTotales(statsAzul);
+                const totalesRojo = calcularTotales(statsRojo);
+
+                // Actualizar UI con datos reales
+                updateStatsDisplay(totalesAzul, totalesRojo);
+
+                // Cargar probabilidades
+                await loadProbabilities(peleaId, luchadorAzulId, luchadorRojoId);
+            }
+        } catch (error) {
+            console.error('Error cargando estadísticas:', error);
+        }
+    }
+
+    function calcularTotales(estadisticas) {
+        return {
+            golpes: estadisticas.reduce((sum, s) => sum + (s.golpesConectados || 0), 0),
+            derribos: estadisticas.reduce((sum, s) => sum + (s.derribos || 0), 0),
+            controlJaula: estadisticas.reduce((sum, s) => sum + (s.controlJaulaSegundos || 0), 0),
+            round: estadisticas.length > 0 ? Math.max(...estadisticas.map(s => s.round || 1)) : 1
+        };
+    }
+
+    function updateStatsDisplay(totalesAzul, totalesRojo) {
+        // Actualizar golpes
+        document.querySelector('.stat-row:nth-child(1) .stat-blue').textContent = totalesAzul.golpes;
+        document.querySelector('.stat-row:nth-child(1) .stat-red').textContent = totalesRojo.golpes;
+
+        // Actualizar derribos
+        document.querySelector('.stat-row:nth-child(2) .stat-blue').textContent = totalesAzul.derribos;
+        document.querySelector('.stat-row:nth-child(2) .stat-red').textContent = totalesRojo.derribos;
+
+        // Actualizar control de jaula
+        document.querySelector('.stat-row:nth-child(3) .stat-blue').textContent = formatTime(totalesAzul.controlJaula);
+        document.querySelector('.stat-row:nth-child(3) .stat-red').textContent = formatTime(totalesRojo.controlJaula);
+
+        // Actualizar round actual
+        const currentRound = Math.max(totalesAzul.round, totalesRojo.round);
+        document.querySelector('.fight-status').textContent = `🔴 EN VIVO - Round ${currentRound}`;
+    }
+
+    async function loadProbabilities(peleaId, luchadorAzulId, luchadorRojoId) {
+        try {
+            const probResponse = await fetch(`${API_BASE}/probabilidades`, {
+                headers: {
+                    'Authorization': `Basic ${currentUser.credentials}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (probResponse.ok) {
+                const todasProbabilidades = await probResponse.json();
+
+                // Filtrar probabilidades de esta pelea
+                const probAzul = todasProbabilidades
+                    .filter(p => p.peleaId === peleaId && p.luchadorId === luchadorAzulId)
+                    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
+
+                const probRojo = todasProbabilidades
+                    .filter(p => p.peleaId === peleaId && p.luchadorId === luchadorRojoId)
+                    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
+
+                let blueProbability = 50;
+                let redProbability = 50;
+
+                if (probAzul && probRojo) {
+                    blueProbability = Math.round(probAzul.probabilidad);
+                    redProbability = Math.round(probRojo.probabilidad);
+                } else {
+                    // Si no hay probabilidades, calcular basadas en estadísticas
+                    const statsResponse = await fetch(`${API_BASE}/estadisticas`, {
+                        headers: {
+                            'Authorization': `Basic ${currentUser.credentials}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+
+                    if (statsResponse.ok) {
+                        const stats = await statsResponse.json();
+                        const statsAzul = stats.filter(s => s.peleaId === peleaId && s.luchadorId === luchadorAzulId);
+                        const statsRojo = stats.filter(s => s.peleaId === peleaId && s.luchadorId === luchadorRojoId);
+
+                        const totalesAzul = calcularTotales(statsAzul);
+                        const totalesRojo = calcularTotales(statsRojo);
+
+                        // Cálculo simple de probabilidad basado en rendimiento
+                        const scoreAzul = totalesAzul.golpes + (totalesAzul.derribos * 5) + (totalesAzul.controlJaula / 60);
+                        const scoreRojo = totalesRojo.golpes + (totalesRojo.derribos * 5) + (totalesRojo.controlJaula / 60);
+                        const total = scoreAzul + scoreRojo;
+
+                        if (total > 0) {
+                            blueProbability = Math.round((scoreAzul / total) * 100);
+                            redProbability = 100 - blueProbability;
+                        }
+                    }
+                }
+
+                // Actualizar UI
+                document.querySelector('.prob-values .stat-blue').textContent = `${blueProbability}%`;
+                document.querySelector('.prob-values .stat-red').textContent = `${redProbability}%`;
+                document.querySelector('.prob-blue').style.width = `${blueProbability}%`;
+                document.querySelector('.prob-red').style.width = `${redProbability}%`;
+            }
+        } catch (error) {
+            console.error('Error cargando probabilidades:', error);
+        }
+    }
+
+    function formatTime(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
     }
 
     function hideAllViews() {
@@ -1335,7 +1785,8 @@
                     console.log('🔴 WebSocket conectado');
                     this.isConnected = true;
                     this.reconnectAttempts = 0;
-                    this.showConnectionStatus('Conectado en tiempo real', 'success');
+                    // Solo mostrar mensaje de éxito si es necesario
+                    // this.showConnectionStatus('Conectado en tiempo real', 'success');
                 };
 
                 this.ws.onmessage = (event) => {
@@ -1350,13 +1801,15 @@
                 this.ws.onclose = (event) => {
                     console.log('❌ WebSocket desconectado:', event.code, event.reason);
                     this.isConnected = false;
-                    this.showConnectionStatus('Desconectado', 'error');
+                    // Comentado para evitar mensaje molesto al desconectar
+                    // this.showConnectionStatus('Desconectado', 'error');
                     this.attemptReconnect();
                 };
 
                 this.ws.onerror = (error) => {
                     console.error('🚫 Error WebSocket:', error);
-                    this.showConnectionStatus('Error de conexión', 'error');
+                    // Comentado para evitar mensaje molesto de error
+                    // this.showConnectionStatus('Error de conexión', 'error');
                 };
 
             } catch (error) {
@@ -1375,7 +1828,9 @@
                     break;
 
                 case 'fight-stats':
-                    this.updateFightStats(message.data);
+                    // Por ahora ignoramos las actualizaciones aleatorias del WebSocket
+                    // this.updateFightStats(message.data);
+                    console.log('Actualización de estadísticas recibida (ignorada por ahora)');
                     break;
 
                 default:
@@ -1488,7 +1943,8 @@
                 this.reconnectDelay = Math.min(this.reconnectDelay * 1.5, 10000);
             } else {
                 console.log('❌ Máximo de reintentos alcanzado');
-                this.showConnectionStatus('Sin conexión - Refresca la página', 'error');
+                // Comentado para evitar mensaje molesto
+                // this.showConnectionStatus('Sin conexión - Refresca la página', 'error');
             }
         }
 
@@ -1514,6 +1970,23 @@
     }
 
     let liveWebSocket = null;
+
+    // Desconectar cuando se cierra la página
+    window.addEventListener('beforeunload', () => {
+        if (liveWebSocket) {
+            liveWebSocket.disconnect();
+        }
+    });
+
+    // Función para forzar actualización manual
+    function forceUpdate() {
+        if (liveWebSocket && liveWebSocket.isConnected) {
+            liveWebSocket.requestUpdate();
+            showToast('Solicitando actualización...', 'success');
+        } else {
+            showToast('No hay conexión WebSocket', 'error');
+        }
+    }
 </script>
 </body>
 </html>

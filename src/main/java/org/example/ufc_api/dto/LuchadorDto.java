@@ -6,8 +6,9 @@ public class LuchadorDto {
     private String nacionalidad;
     private Integer edad;
     private String categoriaPeso;
+    private String historial; // NUEVO CAMPO
 
-    // Getters y Setters
+    // ——— GETTERS Y SETTERS ———
 
     public Long getId() {
         return id;
@@ -43,5 +44,11 @@ public class LuchadorDto {
     public void setCategoriaPeso(String categoriaPeso) {
         this.categoriaPeso = categoriaPeso;
     }
-}
 
+    public String getHistorial() {
+        return historial;
+    }
+    public void setHistorial(String historial) {
+        this.historial = historial;
+    }
+}

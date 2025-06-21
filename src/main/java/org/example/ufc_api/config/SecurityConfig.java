@@ -27,7 +27,7 @@ public class SecurityConfig {
                 .map(u -> User.builder()
                         .username(u.getCorreo())
                         .password(u.getPassword())
-                        .roles(u.getRol())   // "ADMIN", "USER", etc.
+                        .roles(u.getRol())   // "admin", "usuario", etc.
                         .build())
                 .orElseThrow(() -> new UsernameNotFoundException(username));
     }
@@ -45,8 +45,13 @@ public class SecurityConfig {
                         // ✅ REGISTRO DE USUARIOS - SIN AUTENTICACIÓN
                         .requestMatchers(HttpMethod.POST, "/api/usuarios").permitAll()
 
+                        // ✅ ENDPOINT DE AUTENTICACIÓN - PERMITE LOGIN DE CUALQUIER ROL
+                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/usuarios/profile").authenticated() // Usuario puede ver su perfil
+
                         // ❌ ENDPOINTS API CON AUTENTICACIÓN Y ROLES
-                        .requestMatchers(HttpMethod.GET, "/api/usuarios").hasRole("admin")
+                        .requestMatchers(HttpMethod.GET, "/api/usuarios").hasRole("admin") // Solo admin ve todos los usuarios
+                        .requestMatchers(HttpMethod.GET, "/api/usuarios/{id}").hasAnyRole("usuario", "admin") // Usuario puede ver info específica
                         .requestMatchers(HttpMethod.GET, "/api/**").hasAnyRole("usuario", "admin")
                         .requestMatchers(HttpMethod.POST, "/api/**").hasRole("admin")
                         .requestMatchers(HttpMethod.PUT, "/api/**").hasRole("admin")
