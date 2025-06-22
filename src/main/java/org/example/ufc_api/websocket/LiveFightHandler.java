@@ -19,14 +19,20 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Handler para transmisión de peleas en vivo.
+ */
 @Component
 public class LiveFightHandler implements WebSocketHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(LiveFightHandler.class);
-    private final ObjectMapper objectMapper = new ObjectMapper();
     private final CopyOnWriteArraySet<WebSocketSession> sessions = new CopyOnWriteArraySet<>();
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+    private ScheduledExecutorService scheduler;
     private boolean isSimulationRunning = false;
+    private Long currentFightId = null;
+
+    @Autowired
+    private ObjectMapper objectMapper;  // Configurado con JavaTimeModule
 
     @Autowired
     private PeleaRepository peleaRepository;
@@ -37,19 +43,21 @@ public class LiveFightHandler implements WebSocketHandler {
     @Autowired
     private ProbabilidadRepository probabilidadRepository;
 
-    // ID de la pelea actual que se está transmitiendo
-    private Long currentFightId = null;
+    public LiveFightHandler() {
+        this.scheduler = Executors.newSingleThreadScheduledExecutor();
+    }
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
-        sessions.add(session);
-        logger.info("🔴 Cliente conectado: {} - Total clientes: {}",
-                session.getId(), sessions.size());
+        // Si el scheduler está cerrado, recrearlo
+        if (scheduler.isShutdown() || scheduler.isTerminated()) {
+            scheduler = Executors.newSingleThreadScheduledExecutor();
+        }
 
-        // Enviar mensaje de bienvenida
+        sessions.add(session);
+        logger.info("🔴 Cliente conectado: {} - Total clientes: {}", session.getId(), sessions.size());
         sendToSession(session, new FightUpdateMessage("welcome", "Conectado a UFC Live Tracker"));
 
-        // Iniciar transmisión si es el primer cliente
         if (sessions.size() == 1 && !isSimulationRunning) {
             startLiveFightTransmission();
         }
@@ -104,20 +112,20 @@ public class LiveFightHandler implements WebSocketHandler {
         logger.info("🥊 Iniciando transmisión de pelea en vivo");
         isSimulationRunning = true;
 
-        // Buscar la primera pelea no finalizada
         List<Pelea> peleasActivas = peleaRepository.findByFinalizadaFalse();
         if (!peleasActivas.isEmpty()) {
             currentFightId = peleasActivas.get(0).getId();
             logger.info("📺 Transmitiendo pelea ID: {}", currentFightId);
         }
 
-        // Actualizar cada 2 segundos con datos reales de la BD
+        // Programar actualización cada 2 segundos
         scheduler.scheduleAtFixedRate(() -> {
             if (!sessions.isEmpty() && currentFightId != null) {
                 sendCurrentFightData();
             }
         }, 0, 2, TimeUnit.SECONDS);
     }
+
 
     /**
      * Envía los datos actuales de la pelea desde la base de datos

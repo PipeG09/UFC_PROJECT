@@ -9,7 +9,11 @@ public class CorsConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
-                .allowedOrigins("*")
-                .allowedMethods("GET","POST","PUT","DELETE","OPTIONS");
+                // ❌ REMOVED: .allowedOrigins("*") - This causes the error
+                // ✅ FIXED: Use allowedOriginPatterns for wildcard with credentials
+                .allowedOriginPatterns("*")
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                .allowedHeaders("*")
+                .allowCredentials(true); // This needs allowedOriginPatterns, not allowedOrigins
     }
 }

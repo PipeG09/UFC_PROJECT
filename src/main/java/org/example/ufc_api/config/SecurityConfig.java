@@ -6,6 +6,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.builders.WebSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -32,6 +34,18 @@ public class SecurityConfig {
                 .orElseThrow(() -> new UsernameNotFoundException(username));
     }
 
+    /**
+     * ✅ CRITICAL FIX: Exclude WebSocket from Spring Security completely
+     */
+    @Bean
+    public WebSecurityCustomizer webSecurityCustomizer() {
+        return (web) -> web.ignoring()
+                .requestMatchers("/live-fight/**")
+                .requestMatchers("/ws/**")
+                .requestMatchers("/sockjs-node/**")
+                .requestMatchers("/info/**");
+    }
+
     @Bean
     SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http.csrf(csrf -> csrf.disable())
@@ -39,8 +53,8 @@ public class SecurityConfig {
                         // ✅ ARCHIVOS ESTÁTICOS - SIN AUTENTICACIÓN
                         .requestMatchers("/", "/index.html", "/css/**", "/js/**", "/assets/**", "/favicon.ico").permitAll()
 
-                        // ✅ WEBSOCKET Y SOCKJS - SIN AUTENTICACIÓN
-                        .requestMatchers("/live-fight/**", "/sockjs-node/**", "/info/**").permitAll()
+                        // ✅ DEBUG ENDPOINTS - PERMITE TEMPORALMENTE
+                        .requestMatchers("/api/debug/**").permitAll()
 
                         // ✅ REGISTRO DE USUARIOS - SIN AUTENTICACIÓN
                         .requestMatchers(HttpMethod.POST, "/api/usuarios").permitAll()

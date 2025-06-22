@@ -1121,46 +1121,62 @@
         }
     }
 
+    function showFightsSinWebSocket() {
+        console.log('🔴 Mostrando sección de peleas en vivo (SIN WebSocket)...');
+        hideAllViews();
+        document.getElementById('liveFight').classList.add('active');
+
+        loadLiveFightsTemp().then(peleasEnVivo => {
+            if (peleasEnVivo.length === 0) {
+                console.log('❌ No hay peleas EN VIVO ahora mismo - mostrando mensaje');
+                showNoLiveFightsMessage();
+                return;
+            }
+
+            console.log(`✅ Encontradas ${peleasEnVivo.length} peleas EN VIVO - mostrando la primera`);
+            const pelea = peleasEnVivo[0];
+            displayFightInfo(pelea);
+
+            // NO CONECTAR WEBSOCKET por ahora
+            console.log('ℹ️ WebSocket deshabilitado temporalmente');
+        }).catch(error => {
+            console.error('❌ Error cargando peleas en vivo:', error);
+            showNoLiveFightsMessage();
+        });
+    }
+
     // ACTUALIZAR LA FUNCIÓN showFights PARA CARGAR DATOS REALES
     async function showFights() {
+        console.log('🔴 Mostrando sección de peleas en vivo...');
         hideAllViews();
         document.getElementById('liveFight').classList.add('active');
 
         try {
-            // Usar el nuevo endpoint específico para peleas en vivo
-            const response = await fetch(`${API_BASE}/peleas/live`, {
-                headers: {
-                    'Authorization': `Basic ${currentUser.credentials}`,
-                    'Content-Type': 'application/json'
-                }
-            });
+            const peleasEnVivo = await loadLiveFightsTemp();
 
-            if (response.ok) {
-                const peleasEnVivo = await response.json();
-
-                if (peleasEnVivo.length === 0) {
-                    // No hay peleas en vivo - mostrar mensaje
-                    showNoLiveFightsMessage();
-                    return;
-                }
-
-                // Hay peleas en vivo - cargar la primera
-                const pelea = peleasEnVivo[0];
-                await displayFightInfo(pelea);
-
-                // Conectar WebSocket solo si hay peleas en vivo
-                if (!liveWebSocket) {
-                    liveWebSocket = new LiveFightWebSocket();
-                }
-                liveWebSocket.connect();
-            } else {
-                throw new Error('Error cargando peleas en vivo');
+            if (peleasEnVivo.length === 0) {
+                console.log('❌ No hay peleas EN VIVO ahora mismo - mostrando mensaje');
+                showNoLiveFightsMessage();
+                return;
             }
+
+            console.log(`✅ Encontradas ${peleasEnVivo.length} peleas EN VIVO - mostrando la primera`);
+
+            // Hay peleas en vivo - cargar la primera
+            const pelea = peleasEnVivo[0];
+            await displayFightInfo(pelea);
+
+            // Conectar WebSocket solo si hay peleas en vivo
+            if (!liveWebSocket) {
+                liveWebSocket = new LiveFightWebSocket();
+            }
+            liveWebSocket.connect();
         } catch (error) {
-            console.error('Error cargando peleas en vivo:', error);
+            console.error('❌ Error cargando peleas en vivo:', error);
             showNoLiveFightsMessage();
         }
     }
+
 
     async function renderEventsWithFighters(eventos) {
         const eventsGrid = document.getElementById('eventsGrid');
@@ -1181,6 +1197,8 @@
             return;
         }
 
+        console.log('📅 Renderizando eventos con lógica de tiempo:', eventos.length);
+
         // Cargar luchadores para mostrar nombres
         let luchadores = [];
         try {
@@ -1192,9 +1210,10 @@
             });
             if (response.ok) {
                 luchadores = await response.json();
+                console.log('👥 Luchadores cargados:', luchadores.length);
             }
         } catch (error) {
-            console.error('Error cargando luchadores:', error);
+            console.error('❌ Error cargando luchadores:', error);
         }
 
         // Mostrar mensaje de carga
@@ -1205,24 +1224,43 @@
         </div>
     `;
 
-        // Cargar peleas para cada evento usando el nuevo endpoint
-        const eventosConPeleas = await Promise.all(
-            eventos.map(async (evento) => {
-                try {
-                    const peleasDelEvento = await loadFightsForEvent(evento.id);
-                    return { ...evento, peleas: peleasDelEvento };
-                } catch (error) {
-                    console.error(`Error cargando peleas para evento ${evento.id}:`, error);
-                    return { ...evento, peleas: [] };
-                }
-            })
-        );
+        console.log('🔄 Iniciando carga de peleas para cada evento...');
+
+        // Cargar peleas para cada evento
+        const eventosConPeleas = [];
+        for (const evento of eventos) {
+            console.log(`📋 Procesando evento: ${evento.nombre} (ID: ${evento.id})`);
+            try {
+                const peleasDelEvento = await loadFightsForEvent(evento.id);
+                eventosConPeleas.push({ ...evento, peleas: peleasDelEvento });
+                console.log(`✅ Evento ${evento.nombre}: ${peleasDelEvento.length} peleas cargadas`);
+            } catch (error) {
+                console.error(`❌ Error cargando peleas para evento ${evento.id}:`, error);
+                eventosConPeleas.push({ ...evento, peleas: [] });
+            }
+        }
+
+        console.log('🎯 Todos los eventos procesados, renderizando HTML...');
 
         eventsGrid.innerHTML = eventosConPeleas.map(evento => {
+            console.log(`🎨 Renderizando evento: ${evento.nombre} con ${evento.peleas.length} peleas`);
+
+            // Contar peleas por estado REAL
+            const peleasPorEstado = evento.peleas.reduce((acc, pelea) => {
+                const estado = determinarEstadoPeleaReal(pelea);
+                acc[estado] = (acc[estado] || 0) + 1;
+                return acc;
+            }, {});
+
+            console.log(`  - Estados: EN_VIVO: ${peleasPorEstado.EN_VIVO || 0}, FUTURA: ${peleasPorEstado.FUTURA || 0}, FINALIZADA: ${peleasPorEstado.FINALIZADA || 0}`);
+
             const peleasHTML = evento.peleas.length > 0
                 ? evento.peleas.slice(0, 3).map(pelea => {
                     const luchadorAzul = luchadores.find(l => l.id === pelea.luchadorAzulId);
                     const luchadorRojo = luchadores.find(l => l.id === pelea.luchadorRojoId);
+                    const estadoReal = determinarEstadoPeleaReal(pelea);
+
+                    console.log(`  - Pelea: ${luchadorAzul?.nombre || 'TBD'} vs ${luchadorRojo?.nombre || 'TBD'} (Estado: ${estadoReal}, Fecha: ${pelea.fecha})`);
 
                     return `
                     <div class="fight-item">
@@ -1254,6 +1292,20 @@
                 ? `${evento.peleas.length} pelea${evento.peleas.length !== 1 ? 's' : ''}`
                 : 'Sin peleas';
 
+            // Información adicional del estado de las peleas
+            const estadoInfo = evento.peleas.length > 0 ? (() => {
+                const enVivo = peleasPorEstado.EN_VIVO || 0;
+                const futuras = peleasPorEstado.FUTURA || 0;
+                const finalizadas = peleasPorEstado.FINALIZADA || 0;
+
+                let info = [];
+                if (enVivo > 0) info.push(`${enVivo} en vivo`);
+                if (futuras > 0) info.push(`${futuras} futuras`);
+                if (finalizadas > 0) info.push(`${finalizadas} finalizadas`);
+
+                return info.length > 0 ? ` (${info.join(', ')})` : '';
+            })() : '';
+
             return `
             <div class="event-card">
                 <div class="event-header">
@@ -1269,7 +1321,7 @@
                         ${evento.ubicacion || 'Ubicación por definir'}
                     </div>
                     <div class="fights-preview">
-                        <h4><i class="fas fa-fist-raised"></i> Peleas (${peleasInfo})</h4>
+                        <h4><i class="fas fa-fist-raised"></i> Peleas (${peleasInfo}${estadoInfo})</h4>
                         ${peleasHTML}
                         ${evento.peleas.length > 3 ?
                 `<div style="text-align: center; margin-top: 1rem; color: #d32f2f; font-size: 0.9rem;">
@@ -1289,6 +1341,459 @@
             </div>
         `;
         }).join('');
+
+        console.log('✅ Eventos renderizados completamente con lógica de tiempo');
+    }
+
+    async function testEndpointsWithTime() {
+        console.log('🧪 INICIANDO TESTS DE ENDPOINTS CON LÓGICA DE TIEMPO...');
+
+        const endpoints = [
+            { name: 'Todas las peleas', url: '/api/peleas' },
+            { name: 'Peleas EN VIVO (que ya empezaron)', url: '/api/peleas/live' },
+            { name: 'Peleas FUTURAS (que no han empezado)', url: '/api/peleas/upcoming' },
+            { name: 'Peleas ACTIVAS (futuras + en vivo)', url: '/api/peleas/active' },
+            { name: 'Peleas FINALIZADAS', url: '/api/peleas/finished' }
+        ];
+
+        const ahora = new Date();
+        console.log('🕐 Hora actual del navegador:', ahora.toISOString());
+
+        for (const endpoint of endpoints) {
+            try {
+                console.log(`\n🔍 Probando: ${endpoint.name}`);
+                const response = await fetch(`${API_BASE}${endpoint.url}`, {
+                    headers: {
+                        'Authorization': `Basic ${currentUser.credentials}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log(`✅ ${endpoint.name} (${data.length} peleas):`, data);
+
+                    // Análisis adicional para endpoints de peleas
+                    if (endpoint.url.includes('/peleas')) {
+                        data.forEach(pelea => {
+                            const fechaPelea = new Date(pelea.fecha);
+                            const estado = determinarEstadoPeleaReal(pelea);
+                            console.log(`  - ID: ${pelea.id}, Fecha: ${fechaPelea.toISOString()}, Estado: ${estado}, Finalizada: ${pelea.finalizada}`);
+                        });
+                    }
+                } else {
+                    console.error(`❌ ${endpoint.name} - Error ${response.status}:`, response.statusText);
+                }
+            } catch (error) {
+                console.error(`❌ ${endpoint.name} - Error:`, error);
+            }
+        }
+
+        console.log('\n📊 RESUMEN DE PRUEBAS COMPLETADO');
+    }
+
+    function parseFechaSafe(fechaString) {
+        if (!fechaString) {
+            console.warn('⚠️ Fecha vacía o null:', fechaString);
+            return null;
+        }
+
+        try {
+            // Si es un array (problema detectado en los logs), convertir a string
+            if (Array.isArray(fechaString)) {
+                console.warn('⚠️ Fecha es un array:', fechaString);
+                // Convertir array [2025, 6, 12, 15, 47, 25, 676197000] a fecha
+                if (fechaString.length >= 6) {
+                    const [year, month, day, hour, minute, second, nanosecond] = fechaString;
+                    const millisecond = nanosecond ? Math.floor(nanosecond / 1000000) : 0;
+                    const fecha = new Date(year, month - 1, day, hour || 0, minute || 0, second || 0, millisecond);
+                    console.log('✅ Fecha convertida desde array:', fecha.toISOString());
+                    return fecha;
+                }
+                return null;
+            }
+
+            const fecha = new Date(fechaString);
+
+            if (isNaN(fecha.getTime())) {
+                console.error('❌ Fecha inválida:', fechaString);
+                return null;
+            }
+
+            return fecha;
+        } catch (error) {
+            console.error('❌ Error parseando fecha:', fechaString, error);
+            return null;
+        }
+    }
+
+    async function crearPeleaAhoraMismo() {
+        console.log('🕐 CREANDO PELEA QUE EMPEZÓ AHORA MISMO...');
+
+        if (!currentUser || currentUser.rol !== 'admin') {
+            console.error('❌ Necesitas ser admin');
+            return;
+        }
+
+        try {
+            // 1. Obtener datos necesarios
+            const [eventosRes, luchadoresRes] = await Promise.all([
+                authenticatedFetch(`${API_BASE}/eventos`),
+                authenticatedFetch(`${API_BASE}/luchadores`)
+            ]);
+
+            const eventos = await eventosRes.json();
+            const luchadores = await luchadoresRes.json();
+
+            if (eventos.length === 0 || luchadores.length < 2) {
+                console.error('❌ Necesitas al menos 1 evento y 2 luchadores');
+                return;
+            }
+
+            // 2. Usar diferentes formatos de fecha para probar
+            const ahora = new Date();
+
+            const formatos = [
+                {
+                    nombre: 'ISO con Z',
+                    fecha: ahora.toISOString() // 2025-06-22T01:08:45.199Z
+                },
+                {
+                    nombre: 'ISO sin Z',
+                    fecha: ahora.toISOString().slice(0, -1) // 2025-06-22T01:08:45.199
+                },
+                {
+                    nombre: 'Hace 1 minuto ISO',
+                    fecha: new Date(ahora.getTime() - 60 * 1000).toISOString() // Hace 1 minuto
+                }
+            ];
+
+            console.log('🕐 Hora actual frontend:', ahora.toISOString());
+
+            // 3. Probar el primer formato
+            const formato = formatos[0]; // ISO con Z
+
+            const peleaAhora = {
+                eventoId: eventos[0].id,
+                luchadorAzulId: luchadores[0].id,
+                luchadorRojoId: luchadores[1].id,
+                fecha: formato.fecha,
+                finalizada: false
+            };
+
+            console.log(`📝 Creando pelea con formato "${formato.nombre}":`, formato.fecha);
+
+            // 4. Crear la pelea
+            const response = await authenticatedFetch(`${API_BASE}/peleas`, {
+                method: 'POST',
+                body: JSON.stringify(peleaAhora)
+            });
+
+            if (!response.ok) {
+                throw new Error('Error creando pelea');
+            }
+
+            const created = await response.json();
+            console.log('✅ Pelea creada:', created);
+
+            // 5. Verificar inmediatamente
+            console.log('🔍 Verificando detección...');
+
+            // Esperar un poco para que se guarde
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            // Probar detección
+            const peleasEnVivo = await loadLiveFightsTemp();
+
+            console.log(`📊 Resultado: ${peleasEnVivo.length} peleas en vivo detectadas`);
+
+            if (peleasEnVivo.length > 0) {
+                console.log('🎉 ¡ÉXITO! Pelea en vivo detectada');
+                showToast('¡Éxito! Pelea en vivo detectada', 'success');
+
+                // Mostrar la pelea detectada
+                const peleaDetectada = peleasEnVivo.find(p => p.id === created.id);
+                if (peleaDetectada) {
+                    console.log('✅ Pelea encontrada en vivo:', peleaDetectada);
+                }
+            } else {
+                console.log('❌ Pelea no detectada como en vivo');
+                showToast('Problema: Pelea no detectada como en vivo', 'error');
+
+                // Debug: comparar fechas
+                console.log('🔍 DEBUG - Comparación de fechas:');
+                console.log('  Fecha enviada:', formato.fecha);
+                console.log('  Fecha guardada:', created.fecha);
+                console.log('  Hora actual:  ', new Date().toISOString());
+            }
+
+            await loadStats();
+            return created;
+
+        } catch (error) {
+            console.error('❌ Error:', error);
+            showToast('Error: ' + error.message, 'error');
+        }
+    }
+
+    function debugFechas() {
+        const ahora = new Date();
+
+        console.log('🕐 DEBUG DE FECHAS:');
+        console.log('  new Date():', ahora);
+        console.log('  toISOString():', ahora.toISOString());
+        console.log('  toString():', ahora.toString());
+        console.log('  getTime():', ahora.getTime());
+        console.log('  getTimezoneOffset():', ahora.getTimezoneOffset(), 'minutos');
+        console.log('  Zona horaria:', Intl.DateTimeFormat().resolvedOptions().timeZone);
+
+        // Probar parsing
+        const isoString = ahora.toISOString();
+        const parsed = new Date(isoString);
+        console.log('  Parsed back:', parsed.toISOString());
+        console.log('  ¿Son iguales?:', ahora.getTime() === parsed.getTime());
+    }
+
+    async function crearPeleasDePruebaCorregida() {
+        if (!currentUser || currentUser.rol !== 'admin') {
+            console.error('❌ Solo los administradores pueden crear peleas de prueba');
+            showToast('Solo los administradores pueden crear peleas de prueba', 'error');
+            return;
+        }
+
+        try {
+            console.log('🧪 Creando peleas de prueba con fechas corregidas...');
+
+            // Obtener eventos y luchadores disponibles
+            const [eventosRes, luchadoresRes] = await Promise.all([
+                authenticatedFetch(`${API_BASE}/eventos`),
+                authenticatedFetch(`${API_BASE}/luchadores`)
+            ]);
+
+            if (!eventosRes.ok || !luchadoresRes.ok) {
+                throw new Error('Error obteniendo datos necesarios');
+            }
+
+            const eventos = await eventosRes.json();
+            const luchadores = await luchadoresRes.json();
+
+            if (eventos.length === 0 || luchadores.length < 2) {
+                console.error('❌ Necesitas al menos 1 evento y 2 luchadores para crear peleas de prueba');
+                showToast('Necesitas al menos 1 evento y 2 luchadores', 'error');
+                return;
+            }
+
+            const ahora = new Date();
+            const eventoId = eventos[0].id;
+            const luchador1 = luchadores[0].id;
+            const luchador2 = luchadores[1].id;
+
+            console.log(`📋 Usando evento ID: ${eventoId}, luchadores: ${luchador1}, ${luchador2}`);
+            console.log(`🕐 Hora actual: ${ahora.toISOString()}`);
+
+            // CORREGIDO: Usar formato ISO consistente
+            // Pelea EN VIVO (empezó hace 1 hora)
+            const fechaEnVivo = new Date(ahora.getTime() - 60 * 60 * 1000);
+            const peleaEnVivo = {
+                eventoId: eventoId,
+                luchadorAzulId: luchador1,
+                luchadorRojoId: luchador2,
+                fecha: fechaEnVivo.toISOString(), // Formato ISO completo
+                finalizada: false
+            };
+
+            // Pelea FUTURA (en 2 horas)
+            const fechaFutura = new Date(ahora.getTime() + 2 * 60 * 60 * 1000);
+            const peleaFutura = {
+                eventoId: eventoId,
+                luchadorAzulId: luchador2,
+                luchadorRojoId: luchador1,
+                fecha: fechaFutura.toISOString(), // Formato ISO completo
+                finalizada: false
+            };
+
+            // Pelea FINALIZADA (hace 1 día)
+            const fechaFinalizada = new Date(ahora.getTime() - 24 * 60 * 60 * 1000);
+            const peleaFinalizada = {
+                eventoId: eventoId,
+                luchadorAzulId: luchador1,
+                luchadorRojoId: luchador2,
+                fecha: fechaFinalizada.toISOString(), // Formato ISO completo
+                finalizada: true
+            };
+
+            console.log('📅 Fechas de las peleas:');
+            console.log(`  EN VIVO: ${fechaEnVivo.toISOString()} (hace 1 hora)`);
+            console.log(`  FUTURA: ${fechaFutura.toISOString()} (en 2 horas)`);
+            console.log(`  FINALIZADA: ${fechaFinalizada.toISOString()} (hace 1 día)`);
+
+            // Crear las peleas
+            const peleasPrueba = [
+                { data: peleaEnVivo, descripcion: 'EN VIVO (empezó hace 1 hora)' },
+                { data: peleaFutura, descripcion: 'FUTURA (en 2 horas)' },
+                { data: peleaFinalizada, descripcion: 'FINALIZADA (hace 1 día)' }
+            ];
+
+            console.log('🏗️ Creando peleas...');
+            let exitosas = 0;
+
+            for (const pelea of peleasPrueba) {
+                try {
+                    console.log(`📝 Creando pelea ${pelea.descripcion}...`);
+
+                    const response = await authenticatedFetch(`${API_BASE}/peleas`, {
+                        method: 'POST',
+                        body: JSON.stringify(pelea.data)
+                    });
+
+                    if (response.ok) {
+                        const created = await response.json();
+                        console.log(`✅ Pelea ${pelea.descripcion} creada:`, created);
+                        exitosas++;
+                    } else {
+                        const error = await response.text();
+                        console.error(`❌ Error creando pelea ${pelea.descripcion}:`, error);
+                    }
+                } catch (error) {
+                    console.error(`❌ Error creando pelea ${pelea.descripcion}:`, error);
+                }
+
+                // Pequeña pausa entre creaciones
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+
+            if (exitosas > 0) {
+                console.log(`✅ ${exitosas} peleas de prueba creadas exitosamente`);
+                showToast(`${exitosas} peleas de prueba creadas exitosamente`, 'success');
+
+                // Actualizar estadísticas y vista
+                await loadStats();
+                await loadDashboardData();
+            } else {
+                console.error('❌ No se pudo crear ninguna pelea de prueba');
+                showToast('No se pudo crear ninguna pelea de prueba', 'error');
+            }
+
+        } catch (error) {
+            console.error('❌ Error creando peleas de prueba:', error);
+            showToast('Error creando peleas de prueba: ' + error.message, 'error');
+        }
+    }
+
+    async function crearPeleasDePrueba() {
+        if (!currentUser || currentUser.rol !== 'admin') {
+            console.error('❌ Solo los administradores pueden crear peleas de prueba');
+            showToast('Solo los administradores pueden crear peleas de prueba', 'error');
+            return;
+        }
+
+        try {
+            console.log('🧪 Creando peleas de prueba...');
+
+            // Obtener eventos y luchadores disponibles
+            const [eventosRes, luchadoresRes] = await Promise.all([
+                authenticatedFetch(`${API_BASE}/eventos`),
+                authenticatedFetch(`${API_BASE}/luchadores`)
+            ]);
+
+            if (!eventosRes.ok || !luchadoresRes.ok) {
+                throw new Error('Error obteniendo datos necesarios');
+            }
+
+            const eventos = await eventosRes.json();
+            const luchadores = await luchadoresRes.json();
+
+            if (eventos.length === 0 || luchadores.length < 2) {
+                console.error('❌ Necesitas al menos 1 evento y 2 luchadores para crear peleas de prueba');
+                showToast('Necesitas al menos 1 evento y 2 luchadores', 'error');
+                return;
+            }
+
+            const ahora = new Date();
+            const eventoId = eventos[0].id;
+            const luchador1 = luchadores[0].id;
+            const luchador2 = luchadores[1].id;
+
+            console.log(`📋 Usando evento ID: ${eventoId}, luchadores: ${luchador1}, ${luchador2}`);
+
+            // Pelea EN VIVO (empezó hace 1 hora)
+            const peleaEnVivo = {
+                eventoId: eventoId,
+                luchadorAzulId: luchador1,
+                luchadorRojoId: luchador2,
+                fecha: new Date(ahora.getTime() - 60 * 60 * 1000).toISOString(), // Hace 1 hora
+                finalizada: false
+            };
+
+            // Pelea FUTURA (en 2 horas)
+            const peleaFutura = {
+                eventoId: eventoId,
+                luchadorAzulId: luchador2,
+                luchadorRojoId: luchador1,
+                fecha: new Date(ahora.getTime() + 2 * 60 * 60 * 1000).toISOString(), // En 2 horas
+                finalizada: false
+            };
+
+            // Pelea FINALIZADA (hace 1 día)
+            const peleaFinalizada = {
+                eventoId: eventoId,
+                luchadorAzulId: luchador1,
+                luchadorRojoId: luchador2,
+                fecha: new Date(ahora.getTime() - 24 * 60 * 60 * 1000).toISOString(), // Hace 1 día
+                finalizada: true
+            };
+
+            // Crear las peleas
+            const peleasPrueba = [
+                { data: peleaEnVivo, descripcion: 'EN VIVO (empezó hace 1 hora)' },
+                { data: peleaFutura, descripcion: 'FUTURA (en 2 horas)' },
+                { data: peleaFinalizada, descripcion: 'FINALIZADA (hace 1 día)' }
+            ];
+
+            console.log('🏗️ Creando peleas...');
+            let exitosas = 0;
+
+            for (const pelea of peleasPrueba) {
+                try {
+                    console.log(`📝 Creando pelea ${pelea.descripcion}...`);
+
+                    const response = await authenticatedFetch(`${API_BASE}/peleas`, {
+                        method: 'POST',
+                        body: JSON.stringify(pelea.data)
+                    });
+
+                    if (response.ok) {
+                        const created = await response.json();
+                        console.log(`✅ Pelea ${pelea.descripcion} creada:`, created);
+                        exitosas++;
+                    } else {
+                        const error = await response.text();
+                        console.error(`❌ Error creando pelea ${pelea.descripcion}:`, error);
+                    }
+                } catch (error) {
+                    console.error(`❌ Error creando pelea ${pelea.descripcion}:`, error);
+                }
+
+                // Pequeña pausa entre creaciones
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+
+            if (exitosas > 0) {
+                console.log(`✅ ${exitosas} peleas de prueba creadas exitosamente`);
+                showToast(`${exitosas} peleas de prueba creadas exitosamente`, 'success');
+
+                // Actualizar estadísticas y vista
+                await loadStats();
+                await loadDashboardData();
+            } else {
+                console.error('❌ No se pudo crear ninguna pelea de prueba');
+                showToast('No se pudo crear ninguna pelea de prueba', 'error');
+            }
+
+        } catch (error) {
+            console.error('❌ Error creando peleas de prueba:', error);
+            showToast('Error creando peleas de prueba: ' + error.message, 'error');
+        }
     }
 
         function getFightStatusClass(pelea) {
@@ -1508,6 +2013,8 @@
     // ACTUALIZAR LA FUNCIÓN loadEvents PARA USAR LA NUEVA FUNCIÓN
     async function loadEvents() {
         try {
+            console.log('📅 Cargando eventos...');
+
             const response = await fetch(`${API_BASE}/eventos`, {
                 headers: {
                     'Authorization': `Basic ${currentUser.credentials}`,
@@ -1517,19 +2024,51 @@
 
             if (response.ok) {
                 const eventos = await response.json();
+                console.log('📅 Eventos cargados:', eventos.length, eventos);
+
                 document.getElementById('totalEvents').textContent = eventos.length;
 
                 // Usar la función actualizada que carga peleas reales
                 await renderEventsWithFighters(eventos);
             } else {
+                console.error('❌ Error HTTP cargando eventos:', response.status, response.statusText);
                 throw new Error('Error cargando eventos');
             }
         } catch (error) {
-            console.error('Error loading events:', error);
+            console.error('❌ Error loading events:', error);
             document.getElementById('totalEvents').textContent = '0';
             await renderEventsWithFighters([]);
         }
     }
+
+    function debugPeleas() {
+        console.log('🔧 Iniciando debug de peleas...');
+
+        // Verificar endpoint de todas las peleas
+        fetch(`${API_BASE}/peleas`, {
+            headers: {
+                'Authorization': `Basic ${currentUser.credentials}`,
+                'Content-Type': 'application/json'
+            }
+        })
+            .then(response => response.json())
+            .then(peleas => {
+                console.log('📋 TODAS LAS PELEAS en BD:', peleas);
+
+                const peleasEnVivo = peleas.filter(p => !p.finalizada);
+                const peleasFinalizadas = peleas.filter(p => p.finalizada);
+
+                console.log('🔴 Peleas EN VIVO (finalizada=false):', peleasEnVivo);
+                console.log('🏁 Peleas FINALIZADAS (finalizada=true):', peleasFinalizadas);
+
+                console.log('📊 Resumen:');
+                console.log(`  - Total peleas: ${peleas.length}`);
+                console.log(`  - En vivo: ${peleasEnVivo.length}`);
+                console.log(`  - Finalizadas: ${peleasFinalizadas.length}`);
+            })
+            .catch(error => console.error('❌ Error en debug:', error));
+    }
+
 
     function setupEventListeners() {
         // Auth forms
@@ -1600,6 +2139,11 @@
         setLoadingState('login', true);
 
         try {
+            // Crear las credenciales Basic Auth correctamente
+            const credentials = btoa(`${email}:${password}`);
+
+            console.log('🔐 Intentando login para:', email);
+
             // Primero intentar el endpoint de autenticación
             const response = await fetch(`${API_BASE}/auth/login`, {
                 method: 'POST',
@@ -1615,10 +2159,15 @@
                 // Guardar usuario con credenciales para futuros requests
                 currentUser = {
                     ...userData,
-                    credentials: btoa(`${email}:${password}`)
+                    credentials: credentials,  // Guardar las credenciales codificadas
+                    email: email,             // Asegurar que tenemos el email
+                    password: password        // Solo para debugging, no recomendado en producción
                 };
 
                 localStorage.setItem('currentUser', JSON.stringify(currentUser));
+
+                console.log('✅ Login exitoso, usuario guardado:', currentUser);
+
                 showToast('¡Inicio de sesión exitoso!', 'success');
                 showApp();
             } else {
@@ -1626,11 +2175,77 @@
                 throw new Error(error.error || 'Credenciales inválidas');
             }
         } catch (error) {
+            console.error('❌ Error en login:', error);
             showToast(error.message || 'Error de inicio de sesión', 'error');
         } finally {
             setLoadingState('login', false);
         }
     }
+
+    function verifyCredentials() {
+        if (!currentUser || !currentUser.credentials) {
+            console.error('❌ No hay credenciales válidas');
+            showToast('Sesión expirada, por favor inicia sesión nuevamente', 'error');
+            logout();
+            return false;
+        }
+        return true;
+    }
+
+    async function authenticatedFetch(url, options = {}) {
+        if (!verifyCredentials()) {
+            throw new Error('No hay credenciales válidas');
+        }
+
+        const defaultOptions = {
+            headers: {
+                'Authorization': `Basic ${currentUser.credentials}`,
+                'Content-Type': 'application/json',
+                ...options.headers
+            },
+            ...options
+        };
+
+        console.log(`🌐 Request a: ${url} con credenciales`);
+
+        const response = await fetch(url, defaultOptions);
+
+        if (response.status === 401) {
+            console.error('❌ Error 401 - Credenciales inválidas');
+            showToast('Sesión expirada, por favor inicia sesión nuevamente', 'error');
+            logout();
+            throw new Error('No autorizado');
+        }
+
+        return response;
+    }
+
+    function checkAuthStatus() {
+        const savedUser = localStorage.getItem('currentUser');
+        if (savedUser) {
+            try {
+                currentUser = JSON.parse(savedUser);
+
+                // Verificar que las credenciales estén presentes
+                if (!currentUser.credentials) {
+                    console.warn('⚠️ Usuario guardado sin credenciales, requiere nuevo login');
+                    logout();
+                    return;
+                }
+
+                console.log('✅ Usuario recuperado del localStorage:', currentUser);
+                showApp();
+                loadDashboardData();
+            } catch (error) {
+                console.error('❌ Error parseando usuario guardado:', error);
+                logout();
+            }
+        } else {
+            console.log('ℹ️ No hay usuario guardado');
+            showAuthModal();
+        }
+    }
+
 
     async function handleRegister(e) {
         e.preventDefault();
@@ -1754,28 +2369,41 @@
     function showNoLiveFightsMessage() {
         const liveFightContainer = document.getElementById('liveFight');
         liveFightContainer.innerHTML = `
-        <div style="text-align: center; padding: 4rem 2rem; color: #cccccc;">
+        <div class="no-live-fights" style="text-align: center; padding: 4rem 2rem; color: #cccccc;">
             <button class="btn btn-secondary" onclick="showDashboard()" style="float: left; margin-bottom: 2rem;">
                 <i class="fas fa-arrow-left"></i> Volver
             </button>
             <div style="clear: both;"></div>
 
             <div style="background: linear-gradient(145deg, #1a1f2e, #2d1b2e); padding: 3rem; border-radius: 20px; border: 2px solid #404040; max-width: 600px; margin: 0 auto;">
-                <i class="fas fa-video-slash" style="font-size: 4rem; color: #666; margin-bottom: 2rem;"></i>
-                <h2 style="color: #d32f2f; margin-bottom: 1rem; font-size: 2rem;">No hay peleas en vivo</h2>
+                <i class="fas fa-clock" style="font-size: 4rem; color: #666; margin-bottom: 2rem;"></i>
+                <h2 style="color: #d32f2f; margin-bottom: 1rem; font-size: 2rem;">No hay peleas en vivo ahora</h2>
                 <p style="font-size: 1.2rem; margin-bottom: 2rem; line-height: 1.6;">
-                    Actualmente no hay peleas transmitiendo en tiempo real.
+                    No hay peleas que hayan empezado y estén transmitiendo en este momento.
                 </p>
+
+                <div style="background: rgba(255, 193, 7, 0.1); padding: 1.5rem; border-radius: 10px; border-left: 4px solid #ffc107; margin-bottom: 2rem;">
+                    <h4 style="color: #ffc107; margin-bottom: 0.5rem;">
+                        <i class="fas fa-info-circle"></i> ¿Qué significa "en vivo"?
+                    </h4>
+                    <p style="color: #cccccc; margin: 0; font-size: 0.9rem;">
+                        Una pelea está "en vivo" solo cuando ya empezó (la fecha/hora de la pelea es anterior a ahora)
+                        y aún no ha terminado. Las peleas programadas para el futuro aparecen como "Próximamente".
+                    </p>
+                </div>
+
                 <div style="background: rgba(211, 47, 47, 0.1); padding: 1.5rem; border-radius: 10px; border-left: 4px solid #d32f2f; margin-bottom: 2rem;">
                     <h4 style="color: #d32f2f; margin-bottom: 0.5rem;">
-                        <i class="fas fa-info-circle"></i> ¿Qué puedes hacer?
+                        <i class="fas fa-calendar-check"></i> ¿Qué puedes hacer?
                     </h4>
-                    <ul style="text-align: left; list-style: none; padding: 0;">
-                        <li style="margin: 0.5rem 0;"><i class="fas fa-calendar" style="color: #d32f2f; margin-right: 0.5rem;"></i> Revisar próximos eventos</li>
+                    <ul style="text-align: left; list-style: none; padding: 0; margin: 0;">
+                        <li style="margin: 0.5rem 0;"><i class="fas fa-calendar" style="color: #d32f2f; margin-right: 0.5rem;"></i> Ver próximos eventos programados</li>
+                        <li style="margin: 0.5rem 0;"><i class="fas fa-history" style="color: #d32f2f; margin-right: 0.5rem;"></i> Revisar peleas finalizadas</li>
                         <li style="margin: 0.5rem 0;"><i class="fas fa-plus" style="color: #d32f2f; margin-right: 0.5rem;"></i> Crear nuevas peleas (solo admins)</li>
                         <li style="margin: 0.5rem 0;"><i class="fas fa-sync" style="color: #d32f2f; margin-right: 0.5rem;"></i> Actualizar para verificar nuevas peleas</li>
                     </ul>
                 </div>
+
                 <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
                     <button class="btn" onclick="showDashboard()">
                         <i class="fas fa-home"></i> Ir al Dashboard
@@ -1783,6 +2411,15 @@
                     <button class="btn btn-secondary" onclick="refreshData()">
                         <i class="fas fa-sync"></i> Actualizar
                     </button>
+                    ${currentUser.rol === 'admin' ? `
+                        <button class="btn btn-secondary" onclick="crearPeleasDePrueba()">
+                            <i class="fas fa-flask"></i> Crear Pruebas
+                        </button>
+                    ` : ''}
+                </div>
+
+                <div style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid #404040; font-size: 0.9rem; color: #888;">
+                    <p><strong>Para desarrolladores:</strong> Abre la consola y ejecuta <code>testEndpointsWithTime()</code> para ver detalles técnicos.</p>
                 </div>
             </div>
         </div>
@@ -1828,83 +2465,121 @@
 
     async function displayFightInfo(pelea) {
         try {
+            console.log('🥊 Mostrando información de pelea:', pelea);
+
             // Cargar información del evento
-            const eventoResponse = await fetch(`${API_BASE}/eventos/${pelea.eventoId}`, {
-                headers: {
-                    'Authorization': `Basic ${currentUser.credentials}`,
-                    'Content-Type': 'application/json'
-                }
-            });
+            const eventoResponse = await authenticatedFetch(`${API_BASE}/eventos/${pelea.eventoId}`);
+
+            if (!eventoResponse.ok) {
+                throw new Error('Error cargando evento');
+            }
+
             const evento = await eventoResponse.json();
 
             // Cargar información de los luchadores
             const [luchadorAzulResponse, luchadorRojoResponse] = await Promise.all([
-                fetch(`${API_BASE}/luchadores/${pelea.luchadorAzulId}`, {
-                    headers: {
-                        'Authorization': `Basic ${currentUser.credentials}`,
-                        'Content-Type': 'application/json'
-                    }
-                }),
-                fetch(`${API_BASE}/luchadores/${pelea.luchadorRojoId}`, {
-                    headers: {
-                        'Authorization': `Basic ${currentUser.credentials}`,
-                        'Content-Type': 'application/json'
-                    }
-                })
+                authenticatedFetch(`${API_BASE}/luchadores/${pelea.luchadorAzulId}`),
+                authenticatedFetch(`${API_BASE}/luchadores/${pelea.luchadorRojoId}`)
             ]);
+
+            if (!luchadorAzulResponse.ok || !luchadorRojoResponse.ok) {
+                throw new Error('Error cargando luchadores');
+            }
 
             const luchadorAzul = await luchadorAzulResponse.json();
             const luchadorRojo = await luchadorRojoResponse.json();
 
             // Actualizar la UI con datos reales
-            document.querySelector('.fight-title').textContent = `${evento.nombre} - Pelea Principal`;
+            const titleElement = document.querySelector('.fight-title');
+            if (titleElement) {
+                titleElement.textContent = `${evento.nombre} - Pelea Principal`;
+            }
 
             // Actualizar luchador azul
-            document.querySelector('.fighters-vs .fighter-card:first-child .fighter-name').textContent = luchadorAzul.nombre;
-            document.querySelector('.fighters-vs .fighter-card:first-child .fighter-record').textContent =
-                `${luchadorAzul.nacionalidad || 'Internacional'} - ${luchadorAzul.edad || '?'} años`;
+            const blueNameElement = document.querySelector('.fighters-vs .fighter-card:first-child .fighter-name');
+            const blueRecordElement = document.querySelector('.fighters-vs .fighter-card:first-child .fighter-record');
+            if (blueNameElement) blueNameElement.textContent = luchadorAzul.nombre;
+            if (blueRecordElement) {
+                blueRecordElement.textContent = `${luchadorAzul.nacionalidad || 'Internacional'} - ${luchadorAzul.edad || '?'} años`;
+            }
 
             // Actualizar luchador rojo
-            document.querySelector('.fighters-vs .fighter-card:last-child .fighter-name').textContent = luchadorRojo.nombre;
-            document.querySelector('.fighters-vs .fighter-card:last-child .fighter-record').textContent =
-                `${luchadorRojo.nacionalidad || 'Internacional'} - ${luchadorRojo.edad || '?'} años`;
+            const redNameElement = document.querySelector('.fighters-vs .fighter-card:last-child .fighter-name');
+            const redRecordElement = document.querySelector('.fighters-vs .fighter-card:last-child .fighter-record');
+            if (redNameElement) redNameElement.textContent = luchadorRojo.nombre;
+            if (redRecordElement) {
+                redRecordElement.textContent = `${luchadorRojo.nacionalidad || 'Internacional'} - ${luchadorRojo.edad || '?'} años`;
+            }
 
-            // Cargar estadísticas reales
+            // Cargar estadísticas reales solo si estamos en la vista correcta
             await loadFightStatistics(pelea.id, pelea.luchadorAzulId, pelea.luchadorRojoId);
 
+            console.log('✅ Información de pelea actualizada');
+
         } catch (error) {
-            console.error('Error mostrando información de la pelea:', error);
+            console.error('❌ Error mostrando información de la pelea:', error);
+            showToast('Error cargando información de la pelea', 'error');
         }
     }
 
     async function loadFightsForEvent(eventoId) {
+        return await loadFightsForEventTemp(eventoId);
+    }
+
+    async function testEndpointsTemp() {
+        console.log('🧪 INICIANDO TESTS TEMPORALES...');
+
+        if (!verifyCredentials()) return;
+
         try {
-            const response = await fetch(`${API_BASE}/peleas/evento/${eventoId}`, {
-                headers: {
-                    'Authorization': `Basic ${currentUser.credentials}`,
-                    'Content-Type': 'application/json'
-                }
-            });
+            // Test endpoint básico
+            console.log('\n🔍 Probando: Todas las peleas');
+            const response = await authenticatedFetch(`${API_BASE}/peleas`);
 
             if (response.ok) {
-                return await response.json();
+                const peleas = await response.json();
+                console.log(`✅ Todas las peleas (${peleas.length}):`, peleas);
+
+                const ahora = new Date();
+                console.log('🕐 Hora actual:', ahora.toISOString());
+
+                // Analizar cada pelea
+                peleas.forEach(pelea => {
+                    const fechaPelea = new Date(pelea.fecha);
+                    const estado = determinarEstadoPeleaReal(pelea);
+                    console.log(`  - ID: ${pelea.id}, Fecha: ${fechaPelea.toISOString()}, Estado: ${estado}, Finalizada: ${pelea.finalizada}`);
+                });
+
+                // Pruebas adicionales
+                const peleasEnVivo = await loadLiveFightsTemp();
+                const peleasFinalizadas = await loadFinishedFightsTemp();
+
+                console.log(`\n📊 RESUMEN:`);
+                console.log(`  - Total: ${peleas.length}`);
+                console.log(`  - En vivo: ${peleasEnVivo.length}`);
+                console.log(`  - Finalizadas: ${peleasFinalizadas.length}`);
+
+            } else {
+                console.error(`❌ Error ${response.status}:`, response.statusText);
             }
-            return [];
+
         } catch (error) {
-            console.error('Error cargando peleas del evento:', error);
-            return [];
+            console.error('❌ Error en tests:', error);
         }
     }
 
     async function loadFightStatistics(peleaId, luchadorAzulId, luchadorRojoId) {
         try {
+            console.log('📊 Cargando estadísticas de pelea...');
+
+            // Verificar que estamos en la vista de peleas en vivo
+            if (!document.querySelector('.stat-row:nth-child(1) .stat-blue')) {
+                console.log('ℹ️ No estamos en la vista de peleas en vivo, saltando actualización de estadísticas');
+                return;
+            }
+
             // Cargar estadísticas desde la API
-            const statsResponse = await fetch(`${API_BASE}/estadisticas`, {
-                headers: {
-                    'Authorization': `Basic ${currentUser.credentials}`,
-                    'Content-Type': 'application/json'
-                }
-            });
+            const statsResponse = await authenticatedFetch(`${API_BASE}/estadisticas`);
 
             if (statsResponse.ok) {
                 const todasEstadisticas = await statsResponse.json();
@@ -1926,7 +2601,7 @@
                 await loadProbabilities(peleaId, luchadorAzulId, luchadorRojoId);
             }
         } catch (error) {
-            console.error('Error cargando estadísticas:', error);
+            console.error('❌ Error cargando estadísticas:', error);
         }
     }
 
@@ -1940,21 +2615,36 @@
     }
 
     function updateStatsDisplay(totalesAzul, totalesRojo) {
-        // Actualizar golpes
-        document.querySelector('.stat-row:nth-child(1) .stat-blue').textContent = totalesAzul.golpes;
-        document.querySelector('.stat-row:nth-child(1) .stat-red').textContent = totalesRojo.golpes;
+        try {
+            // Verificar que los elementos existen antes de actualizar
+            const elements = {
+                blueStrikes: document.querySelector('.stat-row:nth-child(1) .stat-blue'),
+                redStrikes: document.querySelector('.stat-row:nth-child(1) .stat-red'),
+                blueTakedowns: document.querySelector('.stat-row:nth-child(2) .stat-blue'),
+                redTakedowns: document.querySelector('.stat-row:nth-child(2) .stat-red'),
+                blueCageControl: document.querySelector('.stat-row:nth-child(3) .stat-blue'),
+                redCageControl: document.querySelector('.stat-row:nth-child(3) .stat-red'),
+                fightStatus: document.querySelector('.fight-status')
+            };
 
-        // Actualizar derribos
-        document.querySelector('.stat-row:nth-child(2) .stat-blue').textContent = totalesAzul.derribos;
-        document.querySelector('.stat-row:nth-child(2) .stat-red').textContent = totalesRojo.derribos;
+            // Actualizar solo si los elementos existen
+            if (elements.blueStrikes) elements.blueStrikes.textContent = totalesAzul.golpes;
+            if (elements.redStrikes) elements.redStrikes.textContent = totalesRojo.golpes;
+            if (elements.blueTakedowns) elements.blueTakedowns.textContent = totalesAzul.derribos;
+            if (elements.redTakedowns) elements.redTakedowns.textContent = totalesRojo.derribos;
+            if (elements.blueCageControl) elements.blueCageControl.textContent = formatTime(totalesAzul.controlJaula);
+            if (elements.redCageControl) elements.redCageControl.textContent = formatTime(totalesRojo.controlJaula);
 
-        // Actualizar control de jaula
-        document.querySelector('.stat-row:nth-child(3) .stat-blue').textContent = formatTime(totalesAzul.controlJaula);
-        document.querySelector('.stat-row:nth-child(3) .stat-red').textContent = formatTime(totalesRojo.controlJaula);
+            // Actualizar round actual
+            const currentRound = Math.max(totalesAzul.round, totalesRojo.round);
+            if (elements.fightStatus) {
+                elements.fightStatus.textContent = `🔴 EN VIVO - Round ${currentRound}`;
+            }
 
-        // Actualizar round actual
-        const currentRound = Math.max(totalesAzul.round, totalesRojo.round);
-        document.querySelector('.fight-status').textContent = `🔴 EN VIVO - Round ${currentRound}`;
+            console.log('✅ Estadísticas actualizadas en la UI');
+        } catch (error) {
+            console.error('❌ Error actualizando display de estadísticas:', error);
+        }
     }
 
     async function loadProbabilities(peleaId, luchadorAzulId, luchadorRojoId) {
@@ -2021,6 +2711,108 @@
             }
         } catch (error) {
             console.error('Error cargando probabilidades:', error);
+        }
+    }
+
+    async function loadLiveFightsTemp() {
+        try {
+            console.log('🔴 Obteniendo peleas en vivo (método temporal con fechas seguras)...');
+
+            const response = await authenticatedFetch(`${API_BASE}/peleas`);
+
+            if (response.ok) {
+                const todasLasPeleas = await response.json();
+                const ahora = new Date();
+
+                console.log('🕐 Hora actual del servidor:', ahora.toISOString());
+                console.log('📋 Total peleas recibidas:', todasLasPeleas.length);
+
+                // Filtrar con manejo seguro de fechas
+                const peleasEnVivo = todasLasPeleas.filter(pelea => {
+                    if (pelea.finalizada) {
+                        console.log(`  ❌ Pelea ${pelea.id} descartada: finalizada = true`);
+                        return false;
+                    }
+
+                    const fechaPelea = parseFechaSafe(pelea.fecha);
+                    if (!fechaPelea) {
+                        console.error(`  ❌ Pelea ${pelea.id} descartada: fecha inválida`);
+                        return false;
+                    }
+
+                    const diferenciaMinutos = (ahora - fechaPelea) / (1000 * 60);
+                    const enVivo = fechaPelea <= ahora;
+
+                    console.log(`  📊 Pelea ${pelea.id}:
+                    Fecha: ${fechaPelea.toISOString()}
+                    Diferencia: ${diferenciaMinutos.toFixed(1)} min
+                    En vivo: ${enVivo}`);
+
+                    return enVivo;
+                });
+
+                console.log(`📊 De ${todasLasPeleas.length} peleas, ${peleasEnVivo.length} están en vivo`);
+
+                if (peleasEnVivo.length > 0) {
+                    console.log('🔴 PELEAS EN VIVO ENCONTRADAS:');
+                    peleasEnVivo.forEach(pelea => {
+                        const fechaPelea = parseFechaSafe(pelea.fecha);
+                        console.log(`  - ID: ${pelea.id}, Fecha: ${fechaPelea ? fechaPelea.toISOString() : 'INVÁLIDA'}`);
+                    });
+                }
+
+                return peleasEnVivo;
+            } else {
+                throw new Error(`Error ${response.status}: ${response.statusText}`);
+            }
+        } catch (error) {
+            console.error('❌ Error cargando peleas en vivo:', error);
+            return [];
+        }
+    }
+
+    async function loadFinishedFightsTemp() {
+        try {
+            console.log('🏁 Obteniendo peleas finalizadas (método temporal)...');
+
+            const response = await authenticatedFetch(`${API_BASE}/peleas`);
+
+            if (response.ok) {
+                const todasLasPeleas = await response.json();
+
+                const peleasFinalizadas = todasLasPeleas.filter(pelea => pelea.finalizada);
+
+                console.log(`📊 De ${todasLasPeleas.length} peleas, ${peleasFinalizadas.length} están finalizadas`);
+                return peleasFinalizadas;
+            } else {
+                throw new Error(`Error ${response.status}: ${response.statusText}`);
+            }
+        } catch (error) {
+            console.error('❌ Error cargando peleas finalizadas:', error);
+            return [];
+        }
+    }
+
+    // Función temporal para obtener peleas de un evento
+    async function loadFightsForEventTemp(eventoId) {
+        try {
+            console.log(`🔍 Cargando peleas para evento ${eventoId} (método temporal)...`);
+
+            const response = await authenticatedFetch(`${API_BASE}/peleas`);
+
+            if (response.ok) {
+                const todasLasPeleas = await response.json();
+
+                const peleasDelEvento = todasLasPeleas.filter(pelea => pelea.eventoId === eventoId);
+
+                console.log(`📊 Encontradas ${peleasDelEvento.length} peleas para evento ${eventoId}`);
+                return peleasDelEvento;
+            } else {
+                throw new Error(`Error ${response.status}: ${response.statusText}`);
+            }
+        } catch (error) {
+            console.error('❌ Error cargando peleas del evento:', error);
+            return [];
         }
     }
 
@@ -2097,33 +2889,21 @@
 
     async function loadStats() {
         try {
-            // Usar el nuevo endpoint para peleas en vivo
-            const liveFightsResponse = await fetch(`${API_BASE}/peleas/live`, {
-                headers: {
-                    'Authorization': `Basic ${currentUser.credentials}`,
-                    'Content-Type': 'application/json'
-                }
-            });
+            console.log('📊 Cargando estadísticas (método temporal)...');
 
-            // Usar el nuevo endpoint para peleas finalizadas
-            const finishedFightsResponse = await fetch(`${API_BASE}/peleas/finished`, {
-                headers: {
-                    'Authorization': `Basic ${currentUser.credentials}`,
-                    'Content-Type': 'application/json'
-                }
-            });
+            const [peleasEnVivo, peleasFinalizadas] = await Promise.all([
+                loadLiveFightsTemp(),
+                loadFinishedFightsTemp()
+            ]);
 
-            if (liveFightsResponse.ok && finishedFightsResponse.ok) {
-                const liveFights = await liveFightsResponse.json();
-                const finishedFights = await finishedFightsResponse.json();
+            console.log('🔴 Peleas EN VIVO:', peleasEnVivo.length);
+            console.log('🏁 Peleas FINALIZADAS:', peleasFinalizadas.length);
 
-                document.getElementById('liveFights').textContent = liveFights.length;
-                document.getElementById('completedFights').textContent = finishedFights.length;
-            } else {
-                throw new Error('Error cargando estadísticas de peleas');
-            }
+            document.getElementById('liveFights').textContent = peleasEnVivo.length;
+            document.getElementById('completedFights').textContent = peleasFinalizadas.length;
+
         } catch (error) {
-            console.error('Error loading fight stats:', error);
+            console.error('❌ Error loading fight stats:', error);
             document.getElementById('liveFights').textContent = '0';
             document.getElementById('completedFights').textContent = '0';
         }
@@ -2279,20 +3059,28 @@
         constructor() {
             this.ws = null;
             this.reconnectAttempts = 0;
-            this.maxReconnectAttempts = 5;
-            this.reconnectDelay = 2000;
+            this.maxReconnectAttempts = 3; // Reducido para evitar spam
+            this.reconnectDelay = 3000;    // Aumentado el delay
             this.isConnected = false;
+            this.shouldReconnect = true;   // Flag para controlar reconexiones
         }
 
         connect() {
+            // No intentar conectar si no hay peleas en vivo
+            if (!this.shouldReconnect) {
+                console.log('🚫 WebSocket: Conexión deshabilitada');
+                return;
+            }
+
             try {
+                console.log('🔌 Intentando conectar WebSocket...');
                 this.ws = new WebSocket('ws://localhost:8080/live-fight');
 
                 this.ws.onopen = (event) => {
-                    console.log('🔴 WebSocket conectado');
+                    console.log('✅ WebSocket conectado');
                     this.isConnected = true;
                     this.reconnectAttempts = 0;
-                    // Solo mostrar mensaje de éxito si es necesario
+                    // Solo mostrar éxito en modo debug
                     // this.showConnectionStatus('Conectado en tiempo real', 'success');
                 };
 
@@ -2301,178 +3089,92 @@
                         const message = JSON.parse(event.data);
                         this.handleMessage(message);
                     } catch (error) {
-                        console.error('Error parseando mensaje:', error);
+                        console.error('❌ Error parseando mensaje WebSocket:', error);
                     }
                 };
 
                 this.ws.onclose = (event) => {
-                    console.log('❌ WebSocket desconectado:', event.code, event.reason);
+                    console.log('🔌 WebSocket desconectado:', event.code, event.reason);
                     this.isConnected = false;
-                    // Comentado para evitar mensaje molesto al desconectar
-                    // this.showConnectionStatus('Desconectado', 'error');
-                    this.attemptReconnect();
+
+                    // Solo intentar reconectar si es necesario y no hemos excedido los intentos
+                    if (this.shouldReconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
+                        this.attemptReconnect();
+                    } else {
+                        console.log('🛑 WebSocket: No se reintentará la conexión');
+                    }
                 };
 
                 this.ws.onerror = (error) => {
-                    console.error('🚫 Error WebSocket:', error);
-                    // Comentado para evitar mensaje molesto de error
-                    // this.showConnectionStatus('Error de conexión', 'error');
+                    console.error('❌ Error WebSocket:', error);
+                    // No mostrar mensaje de error al usuario por cada fallo
                 };
 
             } catch (error) {
-                console.error('Error creando WebSocket:', error);
+                console.error('❌ Error creando WebSocket:', error);
                 this.attemptReconnect();
             }
         }
 
         handleMessage(message) {
-            console.log('📨 Mensaje recibido:', message);
+            console.log('📨 Mensaje WebSocket recibido:', message);
 
             switch (message.type) {
                 case 'welcome':
-                    console.log('👋 Bienvenida:', message.data);
-                    showToast('Conectado a transmisión en vivo', 'success');
+                    console.log('👋 WebSocket: Bienvenida recibida');
                     break;
 
                 case 'fight-stats':
-                    // Por ahora ignoramos las actualizaciones aleatorias del WebSocket
-                    // this.updateFightStats(message.data);
-                    console.log('Actualización de estadísticas recibida (ignorada por ahora)');
+                    console.log('📊 WebSocket: Estadísticas de pelea recibidas');
+                    // Por ahora solo logear, no actualizar automáticamente
+                    break;
+
+                case 'no-fights':
+                    console.log('📭 WebSocket: No hay peleas en vivo');
                     break;
 
                 default:
-                    console.log('Mensaje no reconocido:', message);
+                    console.log('❓ WebSocket: Mensaje no reconocido:', message);
             }
-        }
-
-        updateFightStats(stats) {
-            // Actualizar estadísticas en la UI
-            const elements = {
-                blueStrikes: document.querySelector('.stat-row:nth-child(1) .stat-blue'),
-                redStrikes: document.querySelector('.stat-row:nth-child(1) .stat-red'),
-                blueTakedowns: document.querySelector('.stat-row:nth-child(2) .stat-blue'),
-                redTakedowns: document.querySelector('.stat-row:nth-child(2) .stat-red'),
-                blueCageControl: document.querySelector('.stat-row:nth-child(3) .stat-blue'),
-                redCageControl: document.querySelector('.stat-row:nth-child(3) .stat-red'),
-                currentRound: document.querySelector('.fight-status'),
-                blueProbability: document.querySelector('.prob-values .stat-blue'),
-                redProbability: document.querySelector('.prob-values .stat-red'),
-                probBlueBar: document.querySelector('.prob-blue'),
-                probRedBar: document.querySelector('.prob-red')
-            };
-
-            if (elements.blueStrikes) elements.blueStrikes.textContent = stats.blueStrikes;
-            if (elements.redStrikes) elements.redStrikes.textContent = stats.redStrikes;
-            if (elements.blueTakedowns) elements.blueTakedowns.textContent = stats.blueTakedowns;
-            if (elements.redTakedowns) elements.redTakedowns.textContent = stats.redTakedowns;
-            if (elements.blueCageControl) elements.blueCageControl.textContent = this.formatTime(stats.blueCageControl);
-            if (elements.redCageControl) elements.redCageControl.textContent = this.formatTime(stats.redCageControl);
-            if (elements.currentRound) elements.currentRound.textContent = `🔴 EN VIVO - Round ${stats.currentRound} (${stats.timeRemaining})`;
-            if (elements.blueProbability) elements.blueProbability.textContent = `${stats.blueProbability}%`;
-            if (elements.redProbability) elements.redProbability.textContent = `${stats.redProbability}%`;
-            if (elements.probBlueBar) elements.probBlueBar.style.width = `${stats.blueProbability}%`;
-            if (elements.probRedBar) elements.probRedBar.style.width = `${stats.redProbability}%`;
-
-            const timestamp = document.querySelector('.probability-panel p');
-            if (timestamp) {
-                timestamp.textContent = 'Actualizado ahora mismo';
-            }
-
-            this.addUpdateEffect();
-        }
-
-        formatTime(seconds) {
-            const mins = Math.floor(seconds / 60);
-            const secs = seconds % 60;
-            return `${mins}:${secs.toString().padStart(2, '0')}`;
-        }
-
-        addUpdateEffect() {
-            const panels = document.querySelectorAll('.stats-panel, .probability-panel');
-            panels.forEach(panel => {
-                panel.style.transform = 'scale(1.02)';
-                panel.style.transition = 'transform 0.2s ease';
-                setTimeout(() => {
-                    panel.style.transform = 'scale(1)';
-                }, 200);
-            });
-        }
-
-        showConnectionStatus(message, type) {
-            const existingStatus = document.querySelector('.connection-status');
-            if (existingStatus) {
-                existingStatus.remove();
-            }
-
-            const status = document.createElement('div');
-            status.className = `connection-status ${type}`;
-            status.style.cssText = `
-                    position: fixed;
-                    top: 10px;
-                    right: 10px;
-                    padding: 0.5rem 1rem;
-                    border-radius: 5px;
-                    color: white;
-                    font-size: 0.9rem;
-                    z-index: 4000;
-                    background: ${type === 'success' ? '#4caf50' : '#f44336'};
-                    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-                    transform: translateX(300px);
-                    transition: transform 0.3s ease;
-                `;
-            status.innerHTML = `🌐 ${message}`;
-
-            document.body.appendChild(status);
-
-            setTimeout(() => {
-                status.style.transform = 'translateX(0)';
-            }, 100);
-
-            setTimeout(() => {
-                status.style.transform = 'translateX(300px)';
-                setTimeout(() => {
-                    if (status.parentNode) {
-                        status.remove();
-                    }
-                }, 300);
-            }, 3000);
         }
 
         attemptReconnect() {
-            if (this.reconnectAttempts < this.maxReconnectAttempts) {
-                this.reconnectAttempts++;
-                console.log(`🔄 Reintentando conexión (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
-
-                setTimeout(() => {
-                    this.connect();
-                }, this.reconnectDelay);
-
-                this.reconnectDelay = Math.min(this.reconnectDelay * 1.5, 10000);
-            } else {
-                console.log('❌ Máximo de reintentos alcanzado');
-                // Comentado para evitar mensaje molesto
-                // this.showConnectionStatus('Sin conexión - Refresca la página', 'error');
+            if (!this.shouldReconnect || this.reconnectAttempts >= this.maxReconnectAttempts) {
+                console.log('🛑 WebSocket: Máximo de reintentos alcanzado');
+                return;
             }
+
+            this.reconnectAttempts++;
+            console.log(`🔄 WebSocket: Reintento ${this.reconnectAttempts}/${this.maxReconnectAttempts} en ${this.reconnectDelay}ms...`);
+
+            setTimeout(() => {
+                if (this.shouldReconnect) {
+                    this.connect();
+                }
+            }, this.reconnectDelay);
+
+            // Aumentar el delay para el próximo intento
+            this.reconnectDelay = Math.min(this.reconnectDelay * 1.5, 10000);
         }
 
         disconnect() {
+            console.log('🔌 Desconectando WebSocket...');
+            this.shouldReconnect = false;
+
             if (this.ws) {
                 this.ws.close();
                 this.ws = null;
-                this.isConnected = false;
             }
+
+            this.isConnected = false;
+            this.reconnectAttempts = 0;
         }
 
-        sendMessage(message) {
-            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                this.ws.send(JSON.stringify(message));
-            } else {
-                console.warn('WebSocket no conectado');
-            }
-        }
-
-        requestUpdate() {
-            this.sendMessage('request_update');
+        // Método para reactivar conexiones
+        enable() {
+            this.shouldReconnect = true;
+            this.reconnectAttempts = 0;
+            this.reconnectDelay = 3000;
         }
     }
 
@@ -2492,6 +3194,65 @@
             showToast('Solicitando actualización...', 'success');
         } else {
             showToast('No hay conexión WebSocket', 'error');
+        }
+    }
+
+    function determinarEstadoPeleaReal(pelea) {
+        if (pelea.finalizada) {
+            return 'FINALIZADA';
+        }
+
+        const fechaPelea = parseFechaSafe(pelea.fecha);
+        if (!fechaPelea) {
+            console.error('❌ No se pudo parsear fecha de pelea:', pelea);
+            return 'ERROR';
+        }
+
+        const ahora = new Date();
+        const diferenciaMs = ahora.getTime() - fechaPelea.getTime();
+        const diferenciaMinutos = diferenciaMs / (1000 * 60);
+
+        console.log(`🕐 Análisis de fecha para pelea ${pelea.id}:
+        Pelea: ${fechaPelea.toISOString()}
+        Ahora:  ${ahora.toISOString()}
+        Diferencia: ${diferenciaMinutos.toFixed(1)} minutos
+        En vivo: ${diferenciaMs >= 0 ? 'SÍ' : 'NO'}`);
+
+        if (fechaPelea <= ahora) {
+            return 'EN_VIVO';
+        } else {
+            return 'FUTURA';
+        }
+    }
+
+
+    function getFightStatusClass(pelea) {
+        const estado = determinarEstadoPeleaReal(pelea);
+
+        switch (estado) {
+            case 'FINALIZADA':
+                return 'status-finished';
+            case 'EN_VIVO':
+                return 'status-live';
+            case 'FUTURA':
+                return 'status-upcoming';
+            default:
+                return 'status-upcoming';
+        }
+    }
+
+    function getFightStatusText(pelea) {
+        const estado = determinarEstadoPeleaReal(pelea);
+
+        switch (estado) {
+            case 'FINALIZADA':
+                return 'Finalizada';
+            case 'EN_VIVO':
+                return '🔴 En Vivo';
+            case 'FUTURA':
+                return 'Próximamente';
+            default:
+                return 'Próximamente';
         }
     }
 </script>
