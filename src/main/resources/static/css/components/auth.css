@@ -1,4 +1,5 @@
-/* Centrar el panel de login bajo el header */
+
+/* Auth Modal */
 .auth-modal {
     position: fixed;
     top: 0;
@@ -19,8 +20,9 @@
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
     width: 100%;
     max-width: 450px;
-    margin: 1rem;
+    margin: auto;
     border: 1px solid #d32f2f;
+    position: relative;
 }
 
 .auth-header {

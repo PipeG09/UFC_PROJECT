@@ -31,14 +31,22 @@ const AuthComponent = {
      * Mostrar modal de autenticación
      */
     show() {
-        DomUtils.showElement('authModal');
+        const modal = DomUtils.getElement('authModal');
+        if (modal) {
+            modal.style.display = 'flex';
+            modal.classList.add('show');
+        }
     },
 
     /**
      * Ocultar modal de autenticación
      */
     hide() {
-        DomUtils.hideElement('authModal');
+        const modal = DomUtils.getElement('authModal');
+        if (modal) {
+            modal.style.display = 'none';
+            modal.classList.remove('show');
+        }
     },
 
     /**

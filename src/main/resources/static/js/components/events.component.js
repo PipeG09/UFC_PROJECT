@@ -143,7 +143,7 @@ const EventsComponent = {
                     </div>
                     <div class="fights-preview">
                         <h4>
-                            <span><i class="fas fa-fist-raised"></i> Peleas (${totalPeleas}${estadoInfo})</span>
+                            <span><i class="fas fa-fist-raised"></i> Peleas ${totalPeleas}</span>
                             ${tieneEnVivo ? '<span class="fight-count-badge live-badge">EN VIVO</span>' : ''}
                         </h4>
                         ${peleasHTML}
