@@ -1,0 +1,45 @@
+/* =========================================================
+   utilities/animations.css
+   Keyframes y clases genéricas de animación
+   ========================================================= */
+
+/* Pulso verde (indicadores EN VIVO) */          /* :contentReference[oaicite:0]{index=0} */
+@keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(76,175,80,.7); }
+    70%  { box-shadow: 0 0 0 10px rgba(76,175,80,0); }
+    100% { box-shadow: 0 0 0 0 rgba(76,175,80,0); }
+}
+
+/* Brillo verde alterno (borde live-event) */    /* :contentReference[oaicite:1]{index=1} */
+@keyframes liveGlow {
+    from { box-shadow: 0 0 20px rgba(76,175,80,.3); }
+    to   { box-shadow: 0 0 30px rgba(76,175,80,.6); }
+}
+
+/* Entrada descendente (slide-in) */             /* :contentReference[oaicite:2]{index=2} */
+@keyframes slideInDown {
+    from { transform: translateY(-50px); opacity: 0; }
+    to   { transform: translateY(0);      opacity: 1; }
+}
+
+/* Giro continuo (spinners) */                  /* :contentReference[oaicite:3]{index=3} */
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Zoom rápido para actualización de datos */    /* :contentReference[oaicite:4]{index=4} */
+@keyframes updating {
+    0% { transform: scale(1); }
+    50%{ transform: scale(1.05); }
+    100%{transform: scale(1); }
+}
+
+/* Desvanecer modal */                          /* :contentReference[oaicite:5]{index=5} */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* --- Clases utilitarias que aplican las animaciones --- */
+.updating        { animation: updating .5s ease; }          /* :contentReference[oaicite:6]{index=6} */
+.loading         { animation: spin 1s infinite ease-in-out; }/* :contentReference[oaicite:7]{index=7} */
+.loading-spinner { animation: spin 1s infinite linear; }     /* :contentReference[oaicite:8]{index=8} */
+.no-live-fights  { animation: slideInDown .5s ease both; }   /* :contentReference[oaicite:9]{index=9} */
+.event-modal     { animation: fadeIn .3s ease both; }        /* :contentReference[oaicite:10]{index=10} */
+.status-live     { animation: pulse 2s infinite; }           /* :contentReference[oaicite:11]{index=11} */
+.live-event      { animation: liveGlow 2s infinite alternate; }/* :contentReference[oaicite:12]{index=12} */

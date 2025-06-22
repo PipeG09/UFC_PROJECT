@@ -1,0 +1,29 @@
+/* =========================================================
+   utilities/responsive.css
+   Media-queries sacadas de test.html
+   ========================================================= */
+
+/* --------  ≤768 px  (tablets y móviles)  ----------------- */
+
+/* Modal de evento – márgenes y tamaño */        /* :contentReference[oaicite:13]{index=13} */
+@media (max-width: 768px){
+    .event-modal          { padding: 1rem; }
+    .event-modal > div    { max-height: 90vh; border-radius: 15px; }
+
+    /* Pelea: layout vertical */                /* :contentReference[oaicite:14]{index=14} */
+    .fight-detail-item .fighters{
+        flex-direction: column;
+        text-align: center;
+        gap: .5rem;
+    }
+    .fight-detail-item .fighters > div:first-child,
+    .fight-detail-item .fighters > div:last-child{
+        text-align: center;
+    }
+
+    /* Vista Live-Fight: columnas y “VS” */      /* :contentReference[oaicite:15]{index=15} */
+    .vs-separator { transform: rotate(90deg); }
+    .live-stats   { grid-template-columns: 1fr; }
+}
+
+/* (Puedes añadir otros breakpoints siguiendo el mismo patrón) */
