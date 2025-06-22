@@ -704,6 +704,158 @@
         .hidden {
             display: none !important;
         }
+
+        .event-modal {
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .event-modal .fight-detail-item {
+            transition: all 0.3s ease;
+        }
+
+        .event-modal .fight-detail-item:hover {
+            transform: translateX(5px);
+            background: rgba(211, 47, 47, 0.2) !important;
+        }
+
+        /* Estado de peleas mejorado */
+        .fight-status {
+            padding: 0.3rem 0.8rem;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-live {
+            background: linear-gradient(45deg, #4caf50, #66bb6a);
+            animation: pulse 2s infinite;
+        }
+
+        .status-upcoming {
+            background: linear-gradient(45deg, #ff9800, #ffb74d);
+        }
+
+        .status-finished {
+            background: linear-gradient(45deg, #757575, #9e9e9e);
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(76, 175, 80, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0); }
+        }
+
+        /* Mensaje de no hay peleas en vivo */
+        .no-live-fights {
+            animation: slideInDown 0.5s ease;
+        }
+
+        @keyframes slideInDown {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        /* Mejoras para las tarjetas de eventos */
+        .event-card .fights-preview {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .event-card .fights-preview::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .event-card .fights-preview::-webkit-scrollbar-track {
+            background: #404040;
+            border-radius: 2px;
+        }
+
+        .event-card .fights-preview::-webkit-scrollbar-thumb {
+            background: #d32f2f;
+            border-radius: 2px;
+        }
+
+        /* Loading state mejorado */
+        .loading-events {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+            padding: 3rem;
+            color: #cccccc;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #404040;
+            border-top: 4px solid #d32f2f;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        /* Responsivo para el modal de evento */
+        @media (max-width: 768px) {
+            .event-modal {
+                padding: 1rem;
+            }
+
+            .event-modal > div {
+                max-height: 90vh;
+                border-radius: 15px;
+            }
+
+            .fight-detail-item .fighters {
+                flex-direction: column;
+                text-align: center;
+                gap: 0.5rem;
+            }
+
+            .fight-detail-item .fighters > div:first-child,
+            .fight-detail-item .fighters > div:last-child {
+                text-align: center;
+            }
+        }
+
+        /* Mejoras para el contador de peleas */
+        .fights-preview h4 {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .fight-count-badge {
+            background: rgba(211, 47, 47, 0.2);
+            color: #d32f2f;
+            padding: 0.2rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: normal;
+        }
+
+        /* Animación para actualizar datos */
+        .updating {
+            animation: updating 0.5s ease;
+        }
+
+        @keyframes updating {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
     </style>
 </head>
 <body>
@@ -970,21 +1122,46 @@
     }
 
     // ACTUALIZAR LA FUNCIÓN showFights PARA CARGAR DATOS REALES
-    function showFights() {
+    async function showFights() {
         hideAllViews();
         document.getElementById('liveFight').classList.add('active');
 
-        // Cargar datos reales de luchadores
-        loadFightersForEvent();
+        try {
+            // Usar el nuevo endpoint específico para peleas en vivo
+            const response = await fetch(`${API_BASE}/peleas/live`, {
+                headers: {
+                    'Authorization': `Basic ${currentUser.credentials}`,
+                    'Content-Type': 'application/json'
+                }
+            });
 
-        // Conectar WebSocket cuando se muestra la vista de pelea
-        if (!liveWebSocket) {
-            liveWebSocket = new LiveFightWebSocket();
+            if (response.ok) {
+                const peleasEnVivo = await response.json();
+
+                if (peleasEnVivo.length === 0) {
+                    // No hay peleas en vivo - mostrar mensaje
+                    showNoLiveFightsMessage();
+                    return;
+                }
+
+                // Hay peleas en vivo - cargar la primera
+                const pelea = peleasEnVivo[0];
+                await displayFightInfo(pelea);
+
+                // Conectar WebSocket solo si hay peleas en vivo
+                if (!liveWebSocket) {
+                    liveWebSocket = new LiveFightWebSocket();
+                }
+                liveWebSocket.connect();
+            } else {
+                throw new Error('Error cargando peleas en vivo');
+            }
+        } catch (error) {
+            console.error('Error cargando peleas en vivo:', error);
+            showNoLiveFightsMessage();
         }
-        liveWebSocket.connect();
     }
 
-    // NUEVA FUNCIÓN PARA RENDERIZAR EVENTOS CON DATOS DE LUCHADORES REALES
     async function renderEventsWithFighters(eventos) {
         const eventsGrid = document.getElementById('eventsGrid');
 
@@ -994,15 +1171,17 @@
                 <i class="fas fa-calendar-times" style="font-size: 3rem; margin-bottom: 1rem; color: #666;"></i>
                 <h3>No hay eventos disponibles</h3>
                 <p>Crea tu primer evento para comenzar</p>
-                <button class="btn" onclick="createEvent()" style="margin-top: 1rem;">
-                    <i class="fas fa-plus"></i> Crear Evento
-                </button>
+                ${currentUser.rol === 'admin' ? `
+                    <button class="btn" onclick="createEvent()" style="margin-top: 1rem;">
+                        <i class="fas fa-plus"></i> Crear Evento
+                    </button>
+                ` : ''}
             </div>
         `;
             return;
         }
 
-        // Cargar luchadores para mostrar en las peleas
+        // Cargar luchadores para mostrar nombres
         let luchadores = [];
         try {
             const response = await fetch(`${API_BASE}/luchadores`, {
@@ -1018,9 +1197,62 @@
             console.error('Error cargando luchadores:', error);
         }
 
-        eventsGrid.innerHTML = eventos.map(evento => {
-            // Buscar peleas para este evento (simulado por ahora)
-            const mainEventFighters = getMainEventFighters(evento.id, luchadores);
+        // Mostrar mensaje de carga
+        eventsGrid.innerHTML = `
+        <div style="grid-column: 1/-1; text-align: center; padding: 2rem; color: #cccccc;">
+            <div class="loading" style="margin: 0 auto 1rem;"></div>
+            <p>Cargando peleas de los eventos...</p>
+        </div>
+    `;
+
+        // Cargar peleas para cada evento usando el nuevo endpoint
+        const eventosConPeleas = await Promise.all(
+            eventos.map(async (evento) => {
+                try {
+                    const peleasDelEvento = await loadFightsForEvent(evento.id);
+                    return { ...evento, peleas: peleasDelEvento };
+                } catch (error) {
+                    console.error(`Error cargando peleas para evento ${evento.id}:`, error);
+                    return { ...evento, peleas: [] };
+                }
+            })
+        );
+
+        eventsGrid.innerHTML = eventosConPeleas.map(evento => {
+            const peleasHTML = evento.peleas.length > 0
+                ? evento.peleas.slice(0, 3).map(pelea => {
+                    const luchadorAzul = luchadores.find(l => l.id === pelea.luchadorAzulId);
+                    const luchadorRojo = luchadores.find(l => l.id === pelea.luchadorRojoId);
+
+                    return `
+                    <div class="fight-item">
+                        <div class="fighters">
+                            <span class="fighter">${luchadorAzul ? luchadorAzul.nombre : 'Luchador TBD'}</span>
+                            ${luchadorAzul && luchadorAzul.historial ?
+                        `<span class="fighter-record">(${luchadorAzul.historial})</span>` : ''}
+                            <span class="vs">VS</span>
+                            <span class="fighter">${luchadorRojo ? luchadorRojo.nombre : 'Luchador TBD'}</span>
+                            ${luchadorRojo && luchadorRojo.historial ?
+                        `<span class="fighter-record">(${luchadorRojo.historial})</span>` : ''}
+                        </div>
+                        <span class="fight-status ${getFightStatusClass(pelea)}">
+                            ${getFightStatusText(pelea)}
+                        </span>
+                    </div>
+                `;
+                }).join('')
+                : `
+                <div class="fight-item">
+                    <div class="fighters">
+                        <span class="fighter">No hay peleas programadas</span>
+                    </div>
+                    <span class="fight-status status-upcoming">Por definir</span>
+                </div>
+            `;
+
+            const peleasInfo = evento.peleas.length > 0
+                ? `${evento.peleas.length} pelea${evento.peleas.length !== 1 ? 's' : ''}`
+                : 'Sin peleas';
 
             return `
             <div class="event-card">
@@ -1037,34 +1269,21 @@
                         ${evento.ubicacion || 'Ubicación por definir'}
                     </div>
                     <div class="fights-preview">
-                        <h4><i class="fas fa-fist-raised"></i> Main Event</h4>
-                        ${mainEventFighters ? `
-                            <div class="fight-item">
-                                <div class="fighters">
-                                    <span class="fighter">${mainEventFighters.fighter1.nombre}</span>
-                                    <span class="fighter-record">(${mainEventFighters.fighter1.historial})</span>
-                                    <span class="vs">VS</span>
-                                    <span class="fighter">${mainEventFighters.fighter2.nombre}</span>
-                                    <span class="fighter-record">(${mainEventFighters.fighter2.historial})</span>
-                                </div>
-                                <span class="fight-status status-upcoming">Próximamente</span>
-                            </div>
-                        ` : `
-                            <div class="fight-item">
-                                <div class="fighters">
-                                    <span class="fighter">Peleas por definir</span>
-                                </div>
-                                <span class="fight-status status-upcoming">Próximamente</span>
-                            </div>
-                        `}
+                        <h4><i class="fas fa-fist-raised"></i> Peleas (${peleasInfo})</h4>
+                        ${peleasHTML}
+                        ${evento.peleas.length > 3 ?
+                `<div style="text-align: center; margin-top: 1rem; color: #d32f2f; font-size: 0.9rem;">
+                                <i class="fas fa-plus-circle"></i> ${evento.peleas.length - 3} peleas más
+                            </div>` : ''}
                     </div>
                     <div class="event-actions">
                         <button class="btn" onclick="viewEvent(${evento.id})">
                             <i class="fas fa-eye"></i> Ver Evento
                         </button>
-                        <button class="btn btn-secondary" onclick="editEvent(${evento.id})">
-                            <i class="fas fa-edit"></i> Editar
-                        </button>
+                        ${currentUser.rol === 'admin' ?
+                `<button class="btn btn-secondary" onclick="editEvent(${evento.id})">
+                                <i class="fas fa-edit"></i> Editar
+                            </button>` : ''}
                     </div>
                 </div>
             </div>
@@ -1072,7 +1291,197 @@
         }).join('');
     }
 
-    // FUNCIÓN HELPER PARA OBTENER LUCHADORES DEL MAIN EVENT
+        function getFightStatusClass(pelea) {
+            if (pelea.finalizada) {
+                return 'status-finished';
+            }
+
+            const fightDate = new Date(pelea.fecha);
+            const now = new Date();
+
+            if (fightDate <= now) {
+                return 'status-live';
+            }
+
+            return 'status-upcoming';
+        }
+
+        function getFightStatusText(pelea) {
+            if (pelea.finalizada) {
+                return 'Finalizada';
+            }
+
+            const fightDate = new Date(pelea.fecha);
+            const now = new Date();
+
+            if (fightDate <= now) {
+                return '🔴 En Vivo';
+            }
+
+            return 'Próximamente';
+        }
+
+    async function viewEvent(eventId) {
+        try {
+            // Cargar información del evento
+            const eventoResponse = await fetch(`${API_BASE}/eventos/${eventId}`, {
+                headers: {
+                    'Authorization': `Basic ${currentUser.credentials}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!eventoResponse.ok) {
+                throw new Error('Error cargando evento');
+            }
+
+            const evento = await eventoResponse.json();
+
+            // Cargar peleas del evento
+            const peleas = await loadFightsForEvent(eventId);
+
+            // Cargar información de luchadores
+            const luchadoresResponse = await fetch(`${API_BASE}/luchadores`, {
+                headers: {
+                    'Authorization': `Basic ${currentUser.credentials}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            const luchadores = luchadoresResponse.ok ? await luchadoresResponse.json() : [];
+
+            // Mostrar modal o nueva vista con detalles del evento
+            showEventDetails(evento, peleas, luchadores);
+
+        } catch (error) {
+            console.error('Error cargando detalles del evento:', error);
+            showToast('Error cargando detalles del evento', 'error');
+        }
+    }
+
+    function showEventDetails(evento, peleas, luchadores) {
+        const modal = document.createElement('div');
+        modal.className = 'event-modal';
+        modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.9);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 3000;
+        padding: 2rem;
+    `;
+
+        const peleasHTML = peleas.length > 0
+            ? peleas.map(pelea => {
+                const luchadorAzul = luchadores.find(l => l.id === pelea.luchadorAzulId);
+                const luchadorRojo = luchadores.find(l => l.id === pelea.luchadorRojoId);
+
+                return `
+                <div class="fight-detail-item" style="background: rgba(211, 47, 47, 0.1); padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border-left: 3px solid #d32f2f;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                        <div class="fighters" style="display: flex; align-items: center; gap: 1rem; flex: 1;">
+                            <div style="text-align: center;">
+                                <div style="font-weight: bold; color: #2196f3;">${luchadorAzul ? luchadorAzul.nombre : 'TBD'}</div>
+                                ${luchadorAzul ? `
+                                    <div style="font-size: 0.8rem; color: #ccc;">${luchadorAzul.nacionalidad || ''}</div>
+                                    <div style="font-size: 0.8rem; color: #ccc;">${luchadorAzul.historial || ''}</div>
+                                ` : ''}
+                            </div>
+                            <div style="font-size: 1.5rem; color: #d32f2f; font-weight: bold;">VS</div>
+                            <div style="text-align: center;">
+                                <div style="font-weight: bold; color: #d32f2f;">${luchadorRojo ? luchadorRojo.nombre : 'TBD'}</div>
+                                ${luchadorRojo ? `
+                                    <div style="font-size: 0.8rem; color: #ccc;">${luchadorRojo.nacionalidad || ''}</div>
+                                    <div style="font-size: 0.8rem; color: #ccc;">${luchadorRojo.historial || ''}</div>
+                                ` : ''}
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div class="fight-status ${getFightStatusClass(pelea)}" style="padding: 0.5rem 1rem; border-radius: 20px; font-size: 0.9rem; font-weight: bold; margin-bottom: 0.5rem;">
+                                ${getFightStatusText(pelea)}
+                            </div>
+                            <div style="font-size: 0.8rem; color: #ccc;">
+                                ${formatDateTime(pelea.fecha)}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            }).join('')
+            : '<p style="text-align: center; color: #ccc; padding: 2rem;">No hay peleas programadas para este evento</p>';
+
+        modal.innerHTML = `
+        <div style="background: linear-gradient(145deg, #1a1f2e, #2d1b2e); border-radius: 20px; max-width: 800px; width: 100%; max-height: 80vh; overflow-y: auto; border: 2px solid #d32f2f;">
+            <div style="background: linear-gradient(45deg, #d32f2f, #f57c00); padding: 2rem; text-align: center; border-radius: 18px 18px 0 0;">
+                <h2 style="margin: 0; font-size: 2rem;">${evento.nombre}</h2>
+                <p style="margin: 0.5rem 0 0 0; opacity: 0.9;">
+                    <i class="fas fa-calendar"></i> ${formatDate(evento.fecha)} |
+                    <i class="fas fa-map-marker-alt"></i> ${evento.ubicacion || 'Ubicación por definir'}
+                </p>
+            </div>
+            <div style="padding: 2rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                    <h3 style="color: #d32f2f; margin: 0;"><i class="fas fa-fist-raised"></i> Peleas Programadas (${peleas.length})</h3>
+                    <button onclick="this.parentElement.parentElement.parentElement.remove()" style="background: #666; border: none; color: white; padding: 0.5rem 1rem; border-radius: 5px; cursor: pointer;">
+                        <i class="fas fa-times"></i> Cerrar
+                    </button>
+                </div>
+                <div class="fights-list">
+                    ${peleasHTML}
+                </div>
+                ${currentUser.rol === 'admin' ? `
+                    <div style="text-align: center; margin-top: 2rem; padding-top: 2rem; border-top: 1px solid #404040;">
+                        <button class="btn" onclick="addFightToEvent(${evento.id})" style="margin-right: 1rem;">
+                            <i class="fas fa-plus"></i> Agregar Pelea
+                        </button>
+                        <button class="btn btn-secondary" onclick="editEvent(${evento.id})">
+                            <i class="fas fa-edit"></i> Editar Evento
+                        </button>
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+
+        document.body.appendChild(modal);
+
+        // Cerrar modal al hacer clic fuera
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.remove();
+            }
+        });
+    }
+
+        function formatDateTime(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleString('es-ES', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+    function addFightToEvent(eventoId) {
+        if (currentUser.rol !== 'admin') {
+            showToast('Solo los administradores pueden agregar peleas', 'error');
+            return;
+        }
+
+        // Aquí podrías abrir un modal para crear una nueva pelea
+        showToast(`Función para agregar pelea al evento ${eventoId} - En desarrollo`, 'success');
+    }
+
+
+
+        // FUNCIÓN HELPER PARA OBTENER LUCHADORES DEL MAIN EVENT
     function getMainEventFighters(eventoId, luchadores) {
         // Para UFC 317, buscar Topuria vs Oliveira
         const topuria = luchadores.find(l => l.nombre === 'Ilia Topuria');
@@ -1110,7 +1519,7 @@
                 const eventos = await response.json();
                 document.getElementById('totalEvents').textContent = eventos.length;
 
-                // Usar la nueva función que incluye datos de luchadores
+                // Usar la función actualizada que carga peleas reales
                 await renderEventsWithFighters(eventos);
             } else {
                 throw new Error('Error cargando eventos');
@@ -1305,15 +1714,86 @@
         hideAllViews();
         document.getElementById('liveFight').classList.add('active');
 
-        // Primero cargar los datos de la pelea desde la API
-        await loadCurrentFight();
+        try {
+            // Verificar si hay peleas en vivo
+            const response = await fetch(`${API_BASE}/peleas`, {
+                headers: {
+                    'Authorization': `Basic ${currentUser.credentials}`,
+                    'Content-Type': 'application/json'
+                }
+            });
 
-        // Luego conectar WebSocket
-        if (!liveWebSocket) {
-            liveWebSocket = new LiveFightWebSocket();
+            if (response.ok) {
+                const peleas = await response.json();
+                const peleasEnVivo = peleas.filter(p => !p.finalizada);
+
+                if (peleasEnVivo.length === 0) {
+                    // No hay peleas en vivo - mostrar mensaje
+                    showNoLiveFightsMessage();
+                    return;
+                }
+
+                // Hay peleas en vivo - cargar la primera
+                const pelea = peleasEnVivo[0];
+                await displayFightInfo(pelea);
+
+                // Conectar WebSocket solo si hay peleas en vivo
+                if (!liveWebSocket) {
+                    liveWebSocket = new LiveFightWebSocket();
+                }
+                liveWebSocket.connect();
+            } else {
+                throw new Error('Error cargando peleas');
+            }
+        } catch (error) {
+            console.error('Error cargando peleas:', error);
+            showNoLiveFightsMessage();
         }
-        liveWebSocket.connect();
     }
+
+    function showNoLiveFightsMessage() {
+        const liveFightContainer = document.getElementById('liveFight');
+        liveFightContainer.innerHTML = `
+        <div style="text-align: center; padding: 4rem 2rem; color: #cccccc;">
+            <button class="btn btn-secondary" onclick="showDashboard()" style="float: left; margin-bottom: 2rem;">
+                <i class="fas fa-arrow-left"></i> Volver
+            </button>
+            <div style="clear: both;"></div>
+
+            <div style="background: linear-gradient(145deg, #1a1f2e, #2d1b2e); padding: 3rem; border-radius: 20px; border: 2px solid #404040; max-width: 600px; margin: 0 auto;">
+                <i class="fas fa-video-slash" style="font-size: 4rem; color: #666; margin-bottom: 2rem;"></i>
+                <h2 style="color: #d32f2f; margin-bottom: 1rem; font-size: 2rem;">No hay peleas en vivo</h2>
+                <p style="font-size: 1.2rem; margin-bottom: 2rem; line-height: 1.6;">
+                    Actualmente no hay peleas transmitiendo en tiempo real.
+                </p>
+                <div style="background: rgba(211, 47, 47, 0.1); padding: 1.5rem; border-radius: 10px; border-left: 4px solid #d32f2f; margin-bottom: 2rem;">
+                    <h4 style="color: #d32f2f; margin-bottom: 0.5rem;">
+                        <i class="fas fa-info-circle"></i> ¿Qué puedes hacer?
+                    </h4>
+                    <ul style="text-align: left; list-style: none; padding: 0;">
+                        <li style="margin: 0.5rem 0;"><i class="fas fa-calendar" style="color: #d32f2f; margin-right: 0.5rem;"></i> Revisar próximos eventos</li>
+                        <li style="margin: 0.5rem 0;"><i class="fas fa-plus" style="color: #d32f2f; margin-right: 0.5rem;"></i> Crear nuevas peleas (solo admins)</li>
+                        <li style="margin: 0.5rem 0;"><i class="fas fa-sync" style="color: #d32f2f; margin-right: 0.5rem;"></i> Actualizar para verificar nuevas peleas</li>
+                    </ul>
+                </div>
+                <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+                    <button class="btn" onclick="showDashboard()">
+                        <i class="fas fa-home"></i> Ir al Dashboard
+                    </button>
+                    <button class="btn btn-secondary" onclick="refreshData()">
+                        <i class="fas fa-sync"></i> Actualizar
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+        // Desconectar WebSocket si está conectado
+        if (liveWebSocket) {
+            liveWebSocket.disconnect();
+        }
+    }
+
 
     async function loadCurrentFight() {
         try {
@@ -1394,6 +1874,25 @@
 
         } catch (error) {
             console.error('Error mostrando información de la pelea:', error);
+        }
+    }
+
+    async function loadFightsForEvent(eventoId) {
+        try {
+            const response = await fetch(`${API_BASE}/peleas/evento/${eventoId}`, {
+                headers: {
+                    'Authorization': `Basic ${currentUser.credentials}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.ok) {
+                return await response.json();
+            }
+            return [];
+        } catch (error) {
+            console.error('Error cargando peleas del evento:', error);
+            return [];
         }
     }
 
@@ -1598,22 +2097,30 @@
 
     async function loadStats() {
         try {
-            const response = await fetch(`${API_BASE}/peleas`, {
+            // Usar el nuevo endpoint para peleas en vivo
+            const liveFightsResponse = await fetch(`${API_BASE}/peleas/live`, {
                 headers: {
                     'Authorization': `Basic ${currentUser.credentials}`,
                     'Content-Type': 'application/json'
                 }
             });
 
-            if (response.ok) {
-                const peleas = await response.json();
-                const liveFights = peleas.filter(p => !p.finalizada).length;
-                const completedFights = peleas.filter(p => p.finalizada).length;
+            // Usar el nuevo endpoint para peleas finalizadas
+            const finishedFightsResponse = await fetch(`${API_BASE}/peleas/finished`, {
+                headers: {
+                    'Authorization': `Basic ${currentUser.credentials}`,
+                    'Content-Type': 'application/json'
+                }
+            });
 
-                document.getElementById('liveFights').textContent = liveFights;
-                document.getElementById('completedFights').textContent = completedFights;
+            if (liveFightsResponse.ok && finishedFightsResponse.ok) {
+                const liveFights = await liveFightsResponse.json();
+                const finishedFights = await finishedFightsResponse.json();
+
+                document.getElementById('liveFights').textContent = liveFights.length;
+                document.getElementById('completedFights').textContent = finishedFights.length;
             } else {
-                throw new Error('Error cargando peleas');
+                throw new Error('Error cargando estadísticas de peleas');
             }
         } catch (error) {
             console.error('Error loading fight stats:', error);

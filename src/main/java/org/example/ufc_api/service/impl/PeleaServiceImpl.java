@@ -66,6 +66,35 @@ public class PeleaServiceImpl implements PeleaService {
                 .orElseThrow(() -> new RuntimeException("Pelea no encontrada"));
     }
 
+    // NUEVAS IMPLEMENTACIONES
+    @Override
+    public List<PeleaDto> findByEventoId(Long eventoId) {
+        List<Pelea> peleas = peleaRepo.findAll()
+                .stream()
+                .filter(pelea -> pelea.getEvento().getId().equals(eventoId))
+                .collect(Collectors.toList());
+
+        return peleas.stream()
+                .map(this::mapToDto)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<PeleaDto> findLiveFights() {
+        return peleaRepo.findByFinalizadaFalse()
+                .stream()
+                .map(this::mapToDto)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<PeleaDto> findFinishedFights() {
+        return peleaRepo.findByFinalizadaTrue()
+                .stream()
+                .map(this::mapToDto)
+                .collect(Collectors.toList());
+    }
+
     @Override
     public PeleaDto update(Long id, PeleaDto dto) {
         Pelea entidad = peleaRepo.findById(id)
@@ -110,4 +139,3 @@ public class PeleaServiceImpl implements PeleaService {
         return dto;
     }
 }
-

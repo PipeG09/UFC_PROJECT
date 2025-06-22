@@ -9,4 +9,9 @@ public interface PeleaService {
     PeleaDto findById(Long id);
     PeleaDto update(Long id, PeleaDto dto);
     void delete(Long id);
+
+    // NUEVOS MÉTODOS
+    List<PeleaDto> findByEventoId(Long eventoId);
+    List<PeleaDto> findLiveFights();
+    List<PeleaDto> findFinishedFights();
 }
