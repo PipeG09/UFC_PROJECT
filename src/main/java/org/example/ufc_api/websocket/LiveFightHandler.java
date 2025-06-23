@@ -3,6 +3,7 @@ package org.example.ufc_api.websocket;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.ufc_api.model.Pelea;
 import org.example.ufc_api.model.Estadistica;
+import org.example.ufc_api.model.Probabilidad;
 import org.example.ufc_api.repository.PeleaRepository;
 import org.example.ufc_api.repository.EstadisticaRepository;
 import org.example.ufc_api.repository.ProbabilidadRepository;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.socket.*;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.Executors;
@@ -20,7 +22,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Handler para transmisión de peleas en vivo.
+ * Handler para transmisión de peleas en vivo - FIXED VERSION
  */
 @Component
 public class LiveFightHandler implements WebSocketHandler {
@@ -32,7 +34,7 @@ public class LiveFightHandler implements WebSocketHandler {
     private Long currentFightId = null;
 
     @Autowired
-    private ObjectMapper objectMapper;  // Configurado con JavaTimeModule
+    private ObjectMapper objectMapper;
 
     @Autowired
     private PeleaRepository peleaRepository;
@@ -49,7 +51,6 @@ public class LiveFightHandler implements WebSocketHandler {
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
-        // Si el scheduler está cerrado, recrearlo
         if (scheduler.isShutdown() || scheduler.isTerminated()) {
             scheduler = Executors.newSingleThreadScheduledExecutor();
         }
@@ -72,12 +73,9 @@ public class LiveFightHandler implements WebSocketHandler {
         if ("ping".equals(payload)) {
             sendToSession(session, new FightUpdateMessage("pong", "Conexión activa"));
         } else if (payload.startsWith("select_fight:")) {
-            // Cambiar la pelea que se está transmitiendo
             String fightIdStr = payload.substring("select_fight:".length());
             currentFightId = Long.parseLong(fightIdStr);
             logger.info("🥊 Cambiando a pelea ID: {}", currentFightId);
-
-            // Enviar datos inmediatos de la pelea seleccionada
             sendCurrentFightData();
         }
     }
@@ -91,10 +89,8 @@ public class LiveFightHandler implements WebSocketHandler {
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus closeStatus) throws Exception {
         sessions.remove(session);
-        logger.info("🔌 Cliente desconectado: {} - Total clientes: {}",
-                session.getId(), sessions.size());
+        logger.info("🔌 Cliente desconectado: {} - Total clientes: {}", session.getId(), sessions.size());
 
-        // Detener transmisión si no hay clientes
         if (sessions.isEmpty() && isSimulationRunning) {
             stopLiveFightTransmission();
         }
@@ -106,125 +102,233 @@ public class LiveFightHandler implements WebSocketHandler {
     }
 
     /**
-     * Inicia la transmisión de datos en vivo desde la base de datos
+     * 🔧 FIXED: Buscar pelea con datos más recientes
      */
     private void startLiveFightTransmission() {
         logger.info("🥊 Iniciando transmisión de pelea en vivo");
         isSimulationRunning = true;
 
-        List<Pelea> peleasActivas = peleaRepository.findByFinalizadaFalse();
-        if (!peleasActivas.isEmpty()) {
-            currentFightId = peleasActivas.get(0).getId();
+        // 🔧 NUEVA LÓGICA: Buscar pelea activa que tenga estadísticas
+        currentFightId = findBestActiveFight();
+
+        if (currentFightId != null) {
             logger.info("📺 Transmitiendo pelea ID: {}", currentFightId);
+        } else {
+            logger.warn("⚠️ No hay peleas con datos para transmitir");
         }
 
-        // Programar actualización cada 2 segundos
+        // Programar actualización cada 3 segundos
         scheduler.scheduleAtFixedRate(() -> {
-            if (!sessions.isEmpty() && currentFightId != null) {
+            if (!sessions.isEmpty()) {
                 sendCurrentFightData();
             }
-        }, 0, 2, TimeUnit.SECONDS);
+        }, 0, 3, TimeUnit.SECONDS);
     }
 
+    /**
+     * 🔧 NUEVO: Buscar la mejor pelea activa (que tenga estadísticas)
+     */
+    private Long findBestActiveFight() {
+        try {
+            // Obtener todas las peleas activas
+            List<Pelea> peleasActivas = peleaRepository.findByFinalizadaFalse();
+            logger.info("🔍 Evaluando {} peleas activas para encontrar la mejor", peleasActivas.size());
+
+            // Buscar pelea con más estadísticas recientes
+            Long mejorPeleaId = null;
+            int maxEstadisticas = 0;
+
+            for (Pelea pelea : peleasActivas) {
+                List<Estadistica> stats = estadisticaRepository.findByPeleaId(pelea.getId());
+                logger.debug("📊 Pelea {} tiene {} estadísticas", pelea.getId(), stats.size());
+
+                if (stats.size() > maxEstadisticas) {
+                    maxEstadisticas = stats.size();
+                    mejorPeleaId = pelea.getId();
+                    logger.info("🎯 Nueva mejor pelea: ID {} con {} estadísticas", mejorPeleaId, maxEstadisticas);
+                }
+            }
+
+            // Si no hay peleas con estadísticas, tomar la primera disponible
+            if (mejorPeleaId == null && !peleasActivas.isEmpty()) {
+                mejorPeleaId = peleasActivas.get(0).getId();
+                logger.info("📌 Usando primera pelea disponible: ID {}", mejorPeleaId);
+            }
+
+            return mejorPeleaId;
+
+        } catch (Exception e) {
+            logger.error("❌ Error buscando mejor pelea activa: {}", e.getMessage(), e);
+            return null;
+        }
+    }
 
     /**
-     * Envía los datos actuales de la pelea desde la base de datos
+     * 🔧 FIXED: Envía los datos actuales con logs detallados
      */
     private void sendCurrentFightData() {
         try {
             if (currentFightId == null) {
-                logger.warn("⚠️ No hay pelea seleccionada para transmitir");
-                return;
-            }
-
-            // Obtener la pelea de la base de datos
-            Pelea pelea = peleaRepository.findById(currentFightId).orElse(null);
-            if (pelea == null || pelea.getFinalizada()) {
-                logger.info("🏁 La pelea ha finalizado o no existe");
-                // Buscar otra pelea activa
-                List<Pelea> peleasActivas = peleaRepository.findByFinalizadaFalse();
-                if (!peleasActivas.isEmpty()) {
-                    currentFightId = peleasActivas.get(0).getId();
-                    pelea = peleasActivas.get(0);
-                } else {
-                    // No hay peleas activas, enviar mensaje
+                currentFightId = findBestActiveFight();
+                if (currentFightId == null) {
+                    logger.warn("⚠️ No hay pelea seleccionada y no hay peleas disponibles");
                     broadcastFightUpdate(new FightUpdateMessage("no-fights",
                             "No hay peleas en vivo en este momento"));
                     return;
                 }
             }
 
-            // Obtener estadísticas más recientes de la base de datos
+            // Obtener la pelea
+            Pelea pelea = peleaRepository.findById(currentFightId).orElse(null);
+            if (pelea == null) {
+                logger.error("❌ Pelea con ID {} no encontrada", currentFightId);
+                currentFightId = findBestActiveFight();
+                return;
+            }
+
+            logger.debug("🥊 Procesando pelea ID: {} - {} vs {}",
+                    currentFightId, pelea.getAzul().getNombre(), pelea.getRojo().getNombre());
+
+            if (pelea.getFinalizada()) {
+                logger.info("🏁 La pelea {} ha finalizado, buscando otra...", currentFightId);
+                currentFightId = findBestActiveFight();
+                if (currentFightId == null) {
+                    broadcastFightUpdate(new FightUpdateMessage("no-fights",
+                            "No hay peleas en vivo en este momento"));
+                    return;
+                }
+                // Recursión para procesar la nueva pelea
+                sendCurrentFightData();
+                return;
+            }
+
+            // 🔧 LOGS DETALLADOS: Obtener estadísticas
+            Long azulId = pelea.getAzul().getId();
+            Long rojoId = pelea.getRojo().getId();
+
+            logger.debug("🔍 Buscando estadísticas para pelea {} - AzulID: {}, RojoID: {}",
+                    currentFightId, azulId, rojoId);
+
             List<Estadistica> statsAzul = estadisticaRepository
-                    .findByPeleaIdAndLuchadorIdOrderByTimestampDesc(
-                            pelea.getId(), pelea.getAzul().getId());
+                    .findByPeleaIdAndLuchadorIdOrderByTimestampDesc(currentFightId, azulId);
 
             List<Estadistica> statsRojo = estadisticaRepository
-                    .findByPeleaIdAndLuchadorIdOrderByTimestampDesc(
-                            pelea.getId(), pelea.getRojo().getId());
+                    .findByPeleaIdAndLuchadorIdOrderByTimestampDesc(currentFightId, rojoId);
 
-            // Calcular totales
+            logger.info("📈 Estadísticas encontradas - Pelea {}: Azul[{}] = {}, Rojo[{}] = {}",
+                    currentFightId, azulId, statsAzul.size(), rojoId, statsRojo.size());
+
+            // Log de las estadísticas individuales para debug
+            if (!statsAzul.isEmpty()) {
+                Estadistica ultimaAzul = statsAzul.get(0);
+                logger.debug("🔵 Última stat azul: {} golpes, {} derribos, {} control",
+                        ultimaAzul.getGolpesConectados(), ultimaAzul.getDerribos(), ultimaAzul.getControlJaulaSegundos());
+            }
+
+            if (!statsRojo.isEmpty()) {
+                Estadistica ultimaRoja = statsRojo.get(0);
+                logger.debug("🔴 Última stat roja: {} golpes, {} derribos, {} control",
+                        ultimaRoja.getGolpesConectados(), ultimaRoja.getDerribos(), ultimaRoja.getControlJaulaSegundos());
+            }
+
+            // 🔧 CÁLCULO CORRECTO: Sumar estadísticas
             int blueStrikes = statsAzul.stream()
-                    .mapToInt(Estadistica::getGolpesConectados).sum();
+                    .mapToInt(s -> s.getGolpesConectados() != null ? s.getGolpesConectados() : 0)
+                    .sum();
+
             int redStrikes = statsRojo.stream()
-                    .mapToInt(Estadistica::getGolpesConectados).sum();
+                    .mapToInt(s -> s.getGolpesConectados() != null ? s.getGolpesConectados() : 0)
+                    .sum();
 
             int blueTakedowns = statsAzul.stream()
-                    .mapToInt(Estadistica::getDerribos).sum();
+                    .mapToInt(s -> s.getDerribos() != null ? s.getDerribos() : 0)
+                    .sum();
+
             int redTakedowns = statsRojo.stream()
-                    .mapToInt(Estadistica::getDerribos).sum();
+                    .mapToInt(s -> s.getDerribos() != null ? s.getDerribos() : 0)
+                    .sum();
 
             int blueCageControl = statsAzul.stream()
-                    .mapToInt(Estadistica::getControlJaulaSegundos).sum();
+                    .mapToInt(s -> s.getControlJaulaSegundos() != null ? s.getControlJaulaSegundos() : 0)
+                    .sum();
+
             int redCageControl = statsRojo.stream()
-                    .mapToInt(Estadistica::getControlJaulaSegundos).sum();
+                    .mapToInt(s -> s.getControlJaulaSegundos() != null ? s.getControlJaulaSegundos() : 0)
+                    .sum();
 
-            // Obtener probabilidades actuales
-            var probAzul = probabilidadRepository
-                    .findTopByPeleaIdAndLuchadorIdOrderByTimestampDesc(
-                            pelea.getId(), pelea.getAzul().getId());
-            var probRojo = probabilidadRepository
-                    .findTopByPeleaIdAndLuchadorIdOrderByTimestampDesc(
-                            pelea.getId(), pelea.getRojo().getId());
+            // Log de totales calculados
+            logger.info("🧮 Totales calculados - Azul: {}🥊 {}🤼 {}⏱ | Rojo: {}🥊 {}🤼 {}⏱",
+                    blueStrikes, blueTakedowns, blueCageControl,
+                    redStrikes, redTakedowns, redCageControl);
 
-            int blueProbability = probAzul != null ?
-                    probAzul.getProbabilidad().intValue() : 50;
-            int redProbability = probRojo != null ?
-                    probRojo.getProbabilidad().intValue() : 50;
+            // Obtener probabilidades
+            Probabilidad probAzul = probabilidadRepository
+                    .findTopByPeleaIdAndLuchadorIdOrderByTimestampDesc(currentFightId, azulId);
 
-            // Determinar round actual (basado en las estadísticas)
-            int currentRound = statsAzul.isEmpty() ? 1 :
-                    statsAzul.get(0).getRound();
+            Probabilidad probRojo = probabilidadRepository
+                    .findTopByPeleaIdAndLuchadorIdOrderByTimestampDesc(currentFightId, rojoId);
 
-            // Crear objeto con datos reales
+            int blueProbability = 50;
+            int redProbability = 50;
+
+            if (probAzul != null && probRojo != null) {
+                blueProbability = probAzul.getProbabilidad().intValue();
+                redProbability = probRojo.getProbabilidad().intValue();
+                logger.debug("💯 Probabilidades de BD - Azul: {}%, Rojo: {}%", blueProbability, redProbability);
+            } else {
+                // Calcular probabilidades basadas en estadísticas
+                int totalActivity = blueStrikes + redStrikes + blueTakedowns + redTakedowns;
+                if (totalActivity > 0) {
+                    int blueActivity = blueStrikes + (blueTakedowns * 3) + (blueCageControl / 30);
+                    int redActivity = redStrikes + (redTakedowns * 3) + (redCageControl / 30);
+                    int totalCalc = blueActivity + redActivity;
+
+                    if (totalCalc > 0) {
+                        blueProbability = Math.min(80, Math.max(20, (blueActivity * 100) / totalCalc));
+                        redProbability = 100 - blueProbability;
+                    }
+                }
+                logger.debug("🧮 Probabilidades calculadas - Azul: {}%, Rojo: {}%", blueProbability, redProbability);
+            }
+
+            // Determinar round actual
+            int currentRound = 1;
+            if (!statsAzul.isEmpty()) {
+                currentRound = Math.max(currentRound,
+                        statsAzul.get(0).getRound() != null ? statsAzul.get(0).getRound() : 1);
+            }
+            if (!statsRojo.isEmpty()) {
+                currentRound = Math.max(currentRound,
+                        statsRojo.get(0).getRound() != null ? statsRojo.get(0).getRound() : 1);
+            }
+
+            // Crear y enviar datos
             FightStats stats = new FightStats(
                     blueStrikes, redStrikes,
                     blueTakedowns, redTakedowns,
                     blueCageControl, redCageControl,
                     blueProbability, redProbability,
                     currentRound,
-                    "5:00" // Esto podría calcularse basado en timestamps
+                    "5:00"
             );
 
-            // Agregar información de la pelea
             stats.setEventName(pelea.getEvento().getNombre());
             stats.setFightStatus(pelea.getFinalizada() ? "FINISHED" : "LIVE");
 
-            // Enviar a todos los clientes
+            // 🔧 LOG FINAL: Datos que se van a enviar
+            logger.info("📡 ENVIANDO: Pelea {} - Azul: {}🥊 {}🤼 {}⏱ {}% | Rojo: {}🥊 {}🤼 {}⏱ {}%",
+                    currentFightId,
+                    blueStrikes, blueTakedowns, blueCageControl, blueProbability,
+                    redStrikes, redTakedowns, redCageControl, redProbability);
+
             FightUpdateMessage message = new FightUpdateMessage("fight-stats", stats);
             broadcastFightUpdate(message);
 
-            logger.debug("📡 Datos actualizados enviados desde BD para pelea ID: {}",
-                    currentFightId);
-
         } catch (Exception e) {
-            logger.error("❌ Error obteniendo datos de la BD: {}", e.getMessage(), e);
+            logger.error("❌ Error obteniendo datos de la BD para pelea {}: {}", currentFightId, e.getMessage(), e);
         }
     }
 
-    /**
-     * Detiene la transmisión
-     */
     private void stopLiveFightTransmission() {
         logger.info("⏹️ Deteniendo transmisión de pelea");
         isSimulationRunning = false;
@@ -234,18 +338,13 @@ public class LiveFightHandler implements WebSocketHandler {
         }
     }
 
-    /**
-     * Método público para actualizar datos cuando hay cambios en la BD
-     * Puede ser llamado desde otros servicios cuando se actualicen estadísticas
-     */
     public void notifyDataUpdate(Long peleaId) {
-        if (peleaId.equals(currentFightId)) {
-            logger.info("🔄 Notificación de actualización para pelea actual");
+        if (peleaId != null && peleaId.equals(currentFightId)) {
+            logger.info("🔄 Notificación de actualización para pelea actual: {}", peleaId);
             sendCurrentFightData();
         }
     }
 
-    // Método para enviar actualizaciones a todos los clientes
     public void broadcastFightUpdate(FightUpdateMessage update) {
         sessions.removeIf(session -> {
             try {
@@ -257,7 +356,7 @@ public class LiveFightHandler implements WebSocketHandler {
                     return true;
                 }
             } catch (IOException e) {
-                logger.error("Error enviando mensaje a {}: {}", session.getId(), e.getMessage());
+                logger.error("❌ Error enviando mensaje a {}: {}", session.getId(), e.getMessage());
                 return true;
             }
         });
@@ -270,7 +369,7 @@ public class LiveFightHandler implements WebSocketHandler {
                 session.sendMessage(new TextMessage(json));
             }
         } catch (IOException e) {
-            logger.error("Error enviando mensaje a sesión: {}", e.getMessage());
+            logger.error("❌ Error enviando mensaje a sesión: {}", e.getMessage());
         }
     }
 
@@ -285,6 +384,7 @@ public class LiveFightHandler implements WebSocketHandler {
 
     public void setCurrentFightId(Long fightId) {
         this.currentFightId = fightId;
+        logger.info("🎯 Cambiando pelea actual a ID: {}", fightId);
         sendCurrentFightData();
     }
 }
